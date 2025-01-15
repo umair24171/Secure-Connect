@@ -120,7 +120,10 @@ class Login extends StatelessWidget {
                       onTap: () {
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(builder: (context) => Signup()),
+                          MaterialPageRoute(
+                              builder: (context) => Signup(
+                                    selectedAge: '',
+                                  )),
                         );
                       },
                       child: Text(

@@ -80,11 +80,19 @@ class StartScreen extends StatelessWidget {
                             backgroundColor: Color(0xffDFF6FF),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(13))),
-                        onPressed: () {
-                          Navigator.push(
+                        onPressed: () async {
+                          final selectedAge = await Navigator.push<String>(
                               context,
                               MaterialPageRoute(
                                   builder: (context) => SelectAge()));
+
+                          if (context.mounted && selectedAge != null) {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        Signup(selectedAge: selectedAge)));
+                          }
                         },
                         child: Text(
                           'Select age',
@@ -111,7 +119,8 @@ class StartScreen extends StatelessWidget {
                           Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (context) => Signup()));
+                                  builder: (context) =>
+                                      Signup(selectedAge: '')));
                         },
                         child: Text(
                           'Get started',

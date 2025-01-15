@@ -20,6 +20,7 @@ class UserProvider with ChangeNotifier {
     required String password,
     required String userName,
     required String phoneNumber,
+    required String age,
     required BuildContext context,
   }) async {
     if (!_validateInputs(email, password, userName, phoneNumber)) {
@@ -47,6 +48,7 @@ class UserProvider with ChangeNotifier {
           userName: userName,
           userEmail: email,
           userPass: password,
+          age: age,
           userPhoneNumber: phoneNumber,
         );
 

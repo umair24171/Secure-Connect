@@ -6,7 +6,8 @@ import 'package:secureconnect/models/usermodel.dart';
 import 'package:secureconnect/screens/login.dart';
 
 class Signup extends StatelessWidget {
-  Signup({super.key});
+  Signup({super.key, required this.selectedAge});
+  final String selectedAge;
 
   final String fontFamily = 'Roboto';
   final TextEditingController name = TextEditingController();
@@ -123,6 +124,8 @@ class Signup extends StatelessWidget {
                                           password: pass.text,
                                           userName: name.text,
                                           phoneNumber: phone.text,
+                                          age:
+                                              selectedAge, // Add the age parameter
                                           context: context,
                                         );
 

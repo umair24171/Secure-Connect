@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:secureconnect/screens/signup.dart';
 
-class SelectAge extends StatelessWidget {
-  SelectAge({super.key});
+class SelectAge extends StatefulWidget {
+  const SelectAge({super.key});
+
+  @override
+  State<SelectAge> createState() => _SelectAgeState();
+}
+
+class _SelectAgeState extends State<SelectAge> {
   String fontFamily = 'Roboto';
+  String selectedAge = ''; // Variable to store selected age
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +38,15 @@ class SelectAge extends StatelessWidget {
                               fontSize: 22,
                               fontWeight: FontWeight.w700)),
                       SizedBox(height: size.height * 0.1),
-                      AgeContainer('Under 18'),
+                      AgeContainer('Under 18', selectedAge),
                       SizedBox(height: size.height * 0.03),
-                      AgeContainer('18-30'),
+                      AgeContainer('18-30', selectedAge),
                       SizedBox(height: size.height * 0.03),
-                      AgeContainer('31-49'),
+                      AgeContainer('31-49', selectedAge),
                       SizedBox(height: size.height * 0.03),
-                      AgeContainer('50-59'),
+                      AgeContainer('50-59', selectedAge),
                       SizedBox(height: size.height * 0.03),
-                      AgeContainer('60+'),
+                      AgeContainer('60+', selectedAge),
                     ],
                   ),
                 ),
@@ -51,8 +58,7 @@ class SelectAge extends StatelessWidget {
                   children: [
                     TextButton(
                       onPressed: () {
-                        Navigator.push(context,
-                            MaterialPageRoute(builder: (context) => Signup()));
+                        Navigator.pop(context, '');
                       },
                       child: Text(
                         'Skip',
@@ -71,8 +77,7 @@ class SelectAge extends StatelessWidget {
                         shape: CircleBorder(),
                       ),
                       onPressed: () {
-                        Navigator.push(context,
-                            MaterialPageRoute(builder: (context) => Signup()));
+                        Navigator.pop(context, selectedAge);
                       },
                       child: Center(
                         child: Icon(
@@ -92,25 +97,33 @@ class SelectAge extends StatelessWidget {
     );
   }
 
-  Widget AgeContainer(String text) {
-    return Container(
-      height: 50,
-      width: 130,
-      margin: EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: Color(0xff66C7F4),
-        shape: BoxShape.rectangle,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white,
-            fontFamily: fontFamily,
-            fontWeight: FontWeight.w500,
-            fontSize: 17,
+  Widget AgeContainer(String text, String currentSelection) {
+    bool isSelected = text == currentSelection;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedAge = text;
+        });
+      },
+      child: Container(
+        height: 50,
+        width: 130,
+        margin: EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: isSelected ? Color(0xff3399CC) : Color(0xff66C7F4),
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: fontFamily,
+              fontWeight: FontWeight.w500,
+              fontSize: 17,
+            ),
           ),
         ),
       ),
