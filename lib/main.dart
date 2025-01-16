@@ -25,15 +25,19 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _initializeCallDetection();
+   // Delay initialization to ensure context is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeCallDetection();
+    });
   }
 
   Future<void> _initializeCallDetection() async {
-    await CallDetectionService().initialize(context);
+    // await CallDetectionService().initialize(context);
   }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Secure Connect',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),

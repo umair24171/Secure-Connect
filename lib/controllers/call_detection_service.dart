@@ -1,4 +1,6 @@
 // services/call_detection_service.dart
+import 'dart:developer';
+
 import 'package:phone_state/phone_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
@@ -20,32 +22,48 @@ class CallDetectionService {
 
   Future<void> initialize(BuildContext context) async {
     await _initDatabase();
-    final status = await Permission.phone.request();
+    log('phone init');
     
-    if (status.isGranted) {
-      PhoneState.stream.listen((event) async {
-        if (event.status == PhoneStateStatus.CALL_INCOMING || 
-            event.status == PhoneStateStatus.CALL_STARTED) {
-          final phoneNumber = event.number ?? '';
-          final isIncoming = event.status == PhoneStateStatus.CALL_INCOMING;
-          
-          // Get caller info from API
-          final callerInfo = await _callerApiService.getNumberInfo(phoneNumber);
-          
-          if (callerInfo?.isSpam == true) {
-            // Log spam call locally
-            await _logSpamCall(phoneNumber, isIncoming, callerInfo!);
+    // Request both phone and phone state permissions
+    final phoneStatus = await Permission.phone.request();
+    // if (context.mounted){
+    //  _showAlertScreen(context, '', true);}
+    // print('Phone permissions not granted. Status - Phone: $phoneStatus');
+    // final phoneStateStatus = await Permission.phoneState.request();
+    
+    if (phoneStatus.isGranted ) {
+      try {
+        PhoneState.stream.listen((event) async {
+          // Use a separate BuildContext for navigation
+          if (context.mounted) {
+            if (event.status == PhoneStateStatus.CALL_INCOMING ||
+                event.status == PhoneStateStatus.CALL_STARTED) {
+              final phoneNumber = event.number ?? '';
+              final isIncoming = event.status == PhoneStateStatus.CALL_INCOMING;
+              
+              // Get caller info from API
+              final callerInfo = await _callerApiService.getNumberInfo(phoneNumber);
+              
+              if (callerInfo?.isSpam == true) {
+                // Log spam call locally
+                await _logSpamCall(phoneNumber, isIncoming, callerInfo!);
+              }
+              
+              // Show alert using a separate method to handle navigation
+              _showAlertScreen(context, phoneNumber, isIncoming);
+            }
           }
-
-          _showAlertScreen(
-            context, 
-            phoneNumber,
-            isIncoming,
-          );
-        }
-      });
+        }, onError: (error) {
+          print('Phone state stream error: $error');
+        });
+      } catch (e) {
+        print('Error initializing phone state listener: $e');
+      }
+    } else {
+      print('Phone permissions not granted. Status - Phone: $phoneStatus');
     }
   }
+
 
   Future<void> _initDatabase() async {
     database = await openDatabase(
@@ -94,15 +112,17 @@ Future<void> _logSpamCall(String phoneNumber, bool isIncoming, CallerInfo caller
   }
 }
 
-  void _showAlertScreen(BuildContext context, String phoneNumber, bool isIncoming) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AlertScreen(
-          phoneNumber: phoneNumber,
-          callType: isIncoming ? CallType.incoming : CallType.outgoing,
+   void _showAlertScreen(BuildContext context, String phoneNumber, bool isIncoming) {
+    if (context.mounted) {
+      // Use Navigator.of(context) to ensure proper context usage
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => AlertScreen(
+            phoneNumber: phoneNumber,
+            callType: isIncoming ? CallType.incoming : CallType.outgoing,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 }
