@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/start.dart';
 
@@ -14,9 +13,7 @@ class Splash extends StatefulWidget {
 class _SplashState extends State<Splash> {
   
 
-  Future<void> _initializeCallDetection() async {
-    await CallDetectionService().initialize(context);
-  }
+ 
   @override
   void initState() {
     super.initState();
@@ -30,7 +27,7 @@ class _SplashState extends State<Splash> {
         ),
       );
     });
-    _initializeCallDetection();
+ 
   }
 
   @override

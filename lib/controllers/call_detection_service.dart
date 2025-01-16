@@ -4,6 +4,7 @@ import 'dart:developer';
 import 'package:phone_state/phone_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
+import 'package:secureconnect/main.dart';
 import 'package:secureconnect/models/caller_info.dart';
 import 'package:secureconnect/screens/alert.dart';
 import 'package:sqflite/sqflite.dart';
@@ -20,50 +21,72 @@ class CallDetectionService {
   factory CallDetectionService() => _instance;
   CallDetectionService._internal();
 
-  Future<void> initialize(BuildContext context) async {
+
+
+  bool _isAlertScreenShowing = false;
+
+  
+  // Initialize for background operations (without context)
+  Future<void> initializeBackground() async {
     await _initDatabase();
-    log('phone init');
-    
-    // Request both phone and phone state permissions
+  }
+
+  // Initialize for foreground operations (with context)
+   Future<void> initialize(BuildContext context) async {
+    await _initDatabase();
+    await _initPhoneStateListener();
+  }
+
+  Future<void> _initPhoneStateListener() async {
+   
     final phoneStatus = await Permission.phone.request();
-    // if (context.mounted){
-    //  _showAlertScreen(context, '', true);}
-    // print('Phone permissions not granted. Status - Phone: $phoneStatus');
+     print('DEBUG: Current permissions:');
+  
+  // print('Phone State: $phoneState');
+   final notification = await Permission.notification.request();
+  log('Notification: $notification');
+  log('Phone: $phoneStatus');
     // final phoneStateStatus = await Permission.phoneState.request();
+    // _showAlertScreen('', true);
     
     if (phoneStatus.isGranted ) {
-      try {
-        PhoneState.stream.listen((event) async {
-          // Use a separate BuildContext for navigation
-          if (context.mounted) {
-            if (event.status == PhoneStateStatus.CALL_INCOMING ||
-                event.status == PhoneStateStatus.CALL_STARTED) {
-              final phoneNumber = event.number ?? '';
-              final isIncoming = event.status == PhoneStateStatus.CALL_INCOMING;
-              
-              // Get caller info from API
-              final callerInfo = await _callerApiService.getNumberInfo(phoneNumber);
-              
-              if (callerInfo?.isSpam == true) {
-                // Log spam call locally
-                await _logSpamCall(phoneNumber, isIncoming, callerInfo!);
-              }
-              
-              // Show alert using a separate method to handle navigation
-              _showAlertScreen(context, phoneNumber, isIncoming);
+      PhoneState.stream.listen((event) async {
+        switch (event.status) {
+          case PhoneStateStatus.CALL_INCOMING:
+            final phoneNumber = event.number ?? '';
+            await handleIncomingCall(phoneNumber);
+            break;
+          case PhoneStateStatus.CALL_ENDED:
+          // case PhoneStateStatus.CALL_ENDED:
+            // Only dismiss if the call actually ended
+            if (_isAlertScreenShowing && navigatorKey.currentState != null) {
+              navigatorKey.currentState!.pop();
+              _isAlertScreenShowing = false;
             }
-          }
-        }, onError: (error) {
-          print('Phone state stream error: $error');
-        });
-      } catch (e) {
-        print('Error initializing phone state listener: $e');
-      }
-    } else {
-      print('Phone permissions not granted. Status - Phone: $phoneStatus');
+            break;
+          default:
+            break;
+        }
+      });
     }
   }
 
+
+  Future<void> handleIncomingCall(String phoneNumber) async {
+    try {
+      // Get caller info from API
+      final callerInfo = await _callerApiService.getNumberInfo(phoneNumber);
+      
+      if (callerInfo?.isSpam == true) {
+        await _logSpamCall(phoneNumber, true, callerInfo!);
+      }
+
+      // Show alert using global navigator key
+       _showAlertScreen(phoneNumber, true);
+    } catch (e) {
+      print('Error handling incoming call: $e');
+    }
+  }
 
   Future<void> _initDatabase() async {
     database = await openDatabase(
@@ -112,17 +135,31 @@ Future<void> _logSpamCall(String phoneNumber, bool isIncoming, CallerInfo caller
   }
 }
 
-   void _showAlertScreen(BuildContext context, String phoneNumber, bool isIncoming) {
-    if (context.mounted) {
-      // Use Navigator.of(context) to ensure proper context usage
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => AlertScreen(
-            phoneNumber: phoneNumber,
-            callType: isIncoming ? CallType.incoming : CallType.outgoing,
-          ),
+    Future<void> _showAlertScreen(String phoneNumber, bool isIncoming) async {
+    log('Show alert screen called for number: $phoneNumber', name: 'CallDetection');
+    
+    try {
+       await showDialog(
+        context: navigatorKey.currentState!.context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) => AlertScreen(
+          phoneNumber: phoneNumber,
+          callType: isIncoming ? CallType.incoming : CallType.outgoing,
+          // onDismiss: () {
+          //   _isAlertScreenShowing = false;
+          //   Navigator.of(dialogContext).pop();
+          // },
         ),
       );
+    } catch (e, stackTrace) {
+      log(
+        'Error showing alert screen',
+        error: e,
+        stackTrace: stackTrace,
+        name: 'CallDetection'
+      );
+      _isAlertScreenShowing = false;
     }
   }
+
 }

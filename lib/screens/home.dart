@@ -1,7 +1,38 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:phone_state_background/phone_state_background.dart';
+import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/screens/alert.dart';
 import 'package:secureconnect/screens/feedback.dart';
 import 'package:secureconnect/screens/settings.dart';
+
+@pragma('vm:entry-point')
+Future<void> phoneStateBackgroundCallbackHandler(
+  PhoneStateBackgroundEvent event,
+  String number,
+  int duration,
+  // BuildContext context
+) async {
+  // Initialize services
+  final callDetectionService = CallDetectionService();
+  await callDetectionService.initializeBackground();
+
+  switch (event) {
+    case PhoneStateBackgroundEvent.incomingstart:
+      // Handle incoming call start
+      await callDetectionService.handleIncomingCall(number);
+      break;
+    case PhoneStateBackgroundEvent.incomingmissed:
+    case PhoneStateBackgroundEvent.incomingreceived:
+    case PhoneStateBackgroundEvent.incomingend:
+    case PhoneStateBackgroundEvent.outgoingstart:
+    case PhoneStateBackgroundEvent.outgoingend:
+      // Log other events if needed
+      print('Call event: ${event.toString()}, number: $number, duration: $duration s');
+      break;
+  }
+}
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -14,6 +45,36 @@ class _HomeState extends State<Home> {
   final String fontFamily = 'Roboto';
   final TextEditingController search = TextEditingController();
   String searchQuery = '';
+
+   @override
+  void initState() {
+    super.initState();
+    _initializeCallDetection();
+  }
+
+  Future<void> _initializeCallDetection() async {
+    try {
+      // Request permissions for background phone state
+      final granted = await PhoneStateBackground.checkPermission();
+      if (!granted) {
+        final granted = await PhoneStateBackground.requestPermissions();
+        // if (!granted) {
+        //   print('Phone state permission denied');
+        //   return;
+        // }
+      }
+
+      // Initialize background callback
+      await PhoneStateBackground.initialize(phoneStateBackgroundCallbackHandler);
+      
+      // Initialize foreground detection
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        CallDetectionService().initialize(context);
+      });
+    } catch (e) {
+      print('Error initializing call detection: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

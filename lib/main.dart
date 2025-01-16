@@ -1,10 +1,16 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:phone_state_background/phone_state_background.dart';
 import 'package:provider/provider.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/controllers/userprovider.dart';
 import 'package:secureconnect/firebase_options.dart';
 import 'package:secureconnect/screens/splash.dart';
+
+
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,21 +28,14 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
-   // Delay initialization to ensure context is available
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeCallDetection();
-    });
-  }
+// late BuildContext _context;
 
-  Future<void> _initializeCallDetection() async {
-    // await CallDetectionService().initialize(context);
-  }
+
   @override
   Widget build(BuildContext context) {
+    //  _context = context;
     return MaterialApp(
+       navigatorKey: navigatorKey, // Add the navigator key here
       debugShowCheckedModeBanner: false,
       title: 'Secure Connect',
       theme: ThemeData(

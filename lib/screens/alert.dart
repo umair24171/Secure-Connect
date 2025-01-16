@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/controllers/caller_api_service.dart';
 import 'package:secureconnect/models/caller_info.dart';
@@ -19,188 +20,242 @@ class AlertScreen extends StatefulWidget {
   State<AlertScreen> createState() => _AlertScreenState();
 }
 
-class _AlertScreenState extends State<AlertScreen> {
-  final String fontFamily = 'Roboto';
+class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver{
+ final String fontFamily = 'Roboto';
   final CallerApiService _callerApiService = CallerApiService();
   CallerInfo? _callerInfo;
   bool _isLoading = true;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchCallerInfo();
+    _keepScreenOn();
+  }
+  
+   Future<void> _fetchCallerInfo() async {
+    try {
+      final info = await _callerApiService.getNumberInfo(widget.phoneNumber);
+      if (!_isDisposed) {
+        setState(() {
+          _callerInfo = info;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!_isDisposed) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      print('Error fetching caller info: $e');
+    }
   }
 
-  Future<void> _fetchCallerInfo() async {
-    final info = await _callerApiService.getNumberInfo(widget.phoneNumber);
-    setState(() {
-      _callerInfo = info;
-      _isLoading = false;
-    });
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _releaseScreenLock();
+    _isDisposed = true;
+    super.dispose();
   }
 
+  Future<void> _keepScreenOn() async {
+    try {
+      // Keep screen on while alert is showing
+      await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
+      await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_TURN_SCREEN_ON);
+      await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
+    } catch (e) {
+      print('Error setting screen flags: $e');
+    }
+  }
+
+  Future<void> _releaseScreenLock() async {
+    try {
+      await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
+      await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_TURN_SCREEN_ON);
+      await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
+    } catch (e) {
+      print('Error clearing screen flags: $e');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _keepScreenOn();
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return Scaffold(
-      backgroundColor: const Color(0xff66C7F4),
-      body: SafeArea(
-        child: Container(
-          color: const Color(0xff66C7F4),
-          width: double.infinity,
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        children: [
-                          SizedBox(height: size.height * 0.05),
-                          Container(
-                            height: size.width * 0.2,
-                            width: size.width * 0.2,
-                            decoration: const BoxDecoration(
-                              color: Color(0xffDFF6FF),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.person_2_outlined,
-                                size: 55,
-                                color: Colors.black,
+    return WillPopScope(
+      onWillPop: () async => false, // Prevent back button
+      child: Scaffold(
+        backgroundColor: const Color(0xff66C7F4),
+        body: SafeArea(
+          child: Container(
+            color: const Color(0xff66C7F4),
+            width: double.infinity,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                : Column(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          children: [
+                            SizedBox(height: size.height * 0.05),
+                            Container(
+                              height: size.width * 0.2,
+                              width: size.width * 0.2,
+                              decoration: const BoxDecoration(
+                                color: Color(0xffDFF6FF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.person_2_outlined,
+                                  size: 55,
+                                  color: Colors.black,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            _callerInfo?.name ?? 'Unknown Number',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontFamily: fontFamily,
-                              fontSize: size.width * 0.05,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            widget.phoneNumber,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontFamily: fontFamily,
-                              fontSize: size.width * 0.045,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (_callerInfo?.provider != null) ...[
                             const SizedBox(height: 10),
                             Text(
-                              '${_callerInfo?.provider} - ${_callerInfo?.country}',
+                              _callerInfo?.name ?? 'Unknown Number',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontFamily: fontFamily,
-                                fontSize: size.width * 0.04,
-                                fontWeight: FontWeight.w400,
+                                fontSize: size.width * 0.05,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              widget.phoneNumber,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontFamily: fontFamily,
+                                fontSize: size.width * 0.045,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (_callerInfo?.provider != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                '${_callerInfo?.provider} - ${_callerInfo?.country}',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: fontFamily,
+                                  fontSize: size.width * 0.04,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            if (_callerInfo?.isSpam == true || _callerInfo?.spamCount != 0)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.warning_amber,
+                                    color: Color(0xffFFB703),
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Scam Alert${_callerInfo?.spamCount != 0 ? ' (${_callerInfo?.spamCount} reports)' : ''}',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: fontFamily,
+                                      fontSize: size.width * 0.045,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  )
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: size.width * 0.1,
+                          vertical: size.height * 0.07,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xff058B1E),
+                                shape: const CircleBorder(),
+                                fixedSize: Size(size.width * 0.18, size.width * 0.18),
+                                padding: EdgeInsets.zero,
+                              ),
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => Dialog(
+                                    elevation: 0,
+                                    child: ProceedDialog(
+                                      context: context,
+                                      size: size,
+                                      fontFamily: fontFamily,
+                                      phoneNumber: widget.phoneNumber,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: SizedBox.expand(
+                                child: Center(
+                                  child: Text(
+                                    'Proceed',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: fontFamily,
+                                      fontSize: size.width * 0.04,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xffD20D0D),
+                                shape: const CircleBorder(),
+                                fixedSize: Size(size.width * 0.18, size.width * 0.18),
+                                padding: EdgeInsets.zero,
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: SizedBox.expand(
+                                child: Center(
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: fontFamily,
+                                      fontSize: size.width * 0.04,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
-                          const SizedBox(height: 16),
-                          if (_callerInfo?.isSpam == true || _callerInfo?.spamCount != 0)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.warning_amber,
-                                  color: Color(0xffFFB703),
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  'Scam Alert${_callerInfo?.spamCount != 0 ? ' (${_callerInfo?.spamCount} reports)' : ''}',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: fontFamily,
-                                    fontSize: size.width * 0.045,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                )
-                              ],
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: size.width * 0.1,
-                        vertical: size.height * 0.07,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xff058B1E),
-                              shape: const CircleBorder(),
-                              fixedSize: Size(size.width * 0.18, size.width * 0.18),
-                              padding: EdgeInsets.zero,
-                            ),
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => Dialog(
-                                  elevation: 0,
-                                  child: ProceedDialog(
-                                    context: context,
-                                    size: size,
-                                    fontFamily: fontFamily,
-                                    phoneNumber: widget.phoneNumber,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: SizedBox.expand(
-                              child: Center(
-                                child: Text(
-                                  'Proceed',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: fontFamily,
-                                    fontSize: size.width * 0.04,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xffD20D0D),
-                              shape: const CircleBorder(),
-                              fixedSize: Size(size.width * 0.18, size.width * 0.18),
-                              padding: EdgeInsets.zero,
-                            ),
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: SizedBox.expand(
-                              child: Center(
-                                child: Text(
-                                  'Cancel',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: fontFamily,
-                                    fontSize: size.width * 0.04,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );

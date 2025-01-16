@@ -10,6 +10,12 @@
 <string>Need microphone access for phone call detection</string>
 <key>NSPhoneUsageDescription</key>
 <string>Need phone access for call detection</string>
+<key>UIBackgroundModes</key>
+<array>
+    <string>audio</string>
+    <string>voip</string>
+    <string>processing</string>
+</array>
 	<key>CFBundleDisplayName</key>
 	<string>Secureconnect</string>
 	<key>CFBundleExecutable</key>
