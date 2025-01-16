@@ -89,10 +89,10 @@ class _HomeState extends State<Home> {
                     SizedBox(height: size.height * 0.03),
                     InkWell(
                       onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => AlertScreen()));
+                        // Navigator.push(
+                        //     context,
+                        //     MaterialPageRoute(
+                        //         builder: (context) => AlertScreen()));
                       },
                       child: CallButton(
                         image: 'assets/images/outcall.png',

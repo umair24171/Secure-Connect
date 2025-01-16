@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:secureconnect/controllers/spam_call_service.dart';
+import 'package:secureconnect/models/caller_info.dart';
 
 class Scamcalls extends StatefulWidget {
   const Scamcalls({super.key});
@@ -8,9 +11,32 @@ class Scamcalls extends StatefulWidget {
 }
 
 class _ScamcallsState extends State<Scamcalls> {
-  final String fontFamily = 'Roboto';
+ final String fontFamily = 'Roboto';
   final TextEditingController search = TextEditingController();
+  final ScamCallsService _scamCallsService = ScamCallsService();
   String searchQuery = '';
+  List<SpamCall> spamCalls = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeService();
+  }
+
+  Future<void> _initializeService() async {
+    await _scamCallsService.initialize();
+    _loadSpamCalls();
+  }
+
+  Future<void> _loadSpamCalls() async {
+    setState(() => isLoading = true);
+    final calls = await _scamCallsService.getSpamCalls(searchQuery: searchQuery);
+    setState(() {
+      spamCalls = calls;
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,22 +143,72 @@ class _ScamcallsState extends State<Scamcalls> {
                 ),
               ),
               SizedBox(height: size.height * 0.015),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: 3, // Replace with actual data length
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: size.height * 0.01),
-                      child: ScamCallContainer(
-                        size: size,
-                        fontSize: fontSize,
-                        smallFontSize: smallFontSize,
-                        fontFamily: fontFamily,
+               Expanded(
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        itemCount: spamCalls.length,
+                        itemBuilder: (context, index) {
+                          final call = spamCalls[index];
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: size.height * 0.01),
+                            child: ScamCallContainer(
+  size: size,
+  fontSize: fontSize,
+  smallFontSize: smallFontSize,
+  fontFamily: fontFamily,
+  spamCall: call,
+  onIgnore: () async {
+    // Handle ignore action
+    await _scamCallsService.deleteSpamCall(call.id!);
+    _loadSpamCalls();
+  },
+  onReport: () async {
+    // Handle report action
+    // You might want to show a confirmation dialog here
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Report Spam'),
+        content: Text('Do you want to report this number as spam?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              // Report the number
+              Navigator.pop(context);
+            },
+            child: Text('Report'),
+          ),
+        ],
+      ),
+    );
+  },
+),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
+              // Expanded(
+              //   child: ListView.builder(
+              //     itemCount: 3, // Replace with actual data length
+              //     itemBuilder: (context, index) {
+              //       return Padding(
+              //         padding: EdgeInsets.only(bottom: size.height * 0.01),
+              //         child: ScamCallContainer(
+              //           size: size,
+              //           fontSize: fontSize,
+              //           smallFontSize: smallFontSize,
+              //           fontFamily: fontFamily,
+              //         ),
+              //       );
+              //     },
+              //   ),
+              // ),
+            
             ],
           ),
         ),
@@ -141,11 +217,15 @@ class _ScamcallsState extends State<Scamcalls> {
   }
 }
 
+
 class ScamCallContainer extends StatelessWidget {
   final Size size;
   final double fontSize;
   final double smallFontSize;
   final String fontFamily;
+  final SpamCall spamCall;
+  final VoidCallback? onIgnore;
+  final VoidCallback? onReport;
 
   const ScamCallContainer({
     super.key,
@@ -153,7 +233,24 @@ class ScamCallContainer extends StatelessWidget {
     required this.fontSize,
     required this.smallFontSize,
     required this.fontFamily,
+    required this.spamCall,
+    this.onIgnore,
+    this.onReport,
   });
+
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(timestamp.year, timestamp.month, timestamp.day);
+
+    if (date == today) {
+      return DateFormat('hh:mm a').format(timestamp);
+    } else if (date == today.subtract(const Duration(days: 1))) {
+      return 'Yesterday ${DateFormat('hh:mm a').format(timestamp)}';
+    } else {
+      return DateFormat('MMM dd, hh:mm a').format(timestamp);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,48 +266,89 @@ class ScamCallContainer extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.warning_amber_outlined,
-                color: const Color(0xffFFB703),
-                size: size.width * 0.06,
-              ),
-              SizedBox(width: size.width * 0.02),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '03178251928',
-                    style: TextStyle(
-                      color: const Color(0xff393939),
-                      fontFamily: fontFamily,
-                      fontSize: fontSize,
-                      fontWeight: FontWeight.w500,
-                    ),
+          Expanded(
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_outlined,
+                  color: const Color(0xffFFB703),
+                  size: size.width * 0.06,
+                ),
+                SizedBox(width: size.width * 0.02),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        spamCall.name ?? 'Unknown Number',
+                        style: TextStyle(
+                          color: const Color(0xff393939),
+                          fontFamily: fontFamily,
+                          fontSize: fontSize,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        spamCall.phoneNumber,
+                        style: TextStyle(
+                          color: const Color(0xff393939),
+                          fontFamily: fontFamily,
+                          fontSize: smallFontSize,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            _formatTimestamp(spamCall.timestamp),
+                            style: TextStyle(
+                              color: const Color(0xff848484),
+                              fontFamily: fontFamily,
+                              fontSize: smallFontSize,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (spamCall.spamCount > 0) ...[
+                            Text(
+                              ' • ${spamCall.spamCount} reports',
+                              style: TextStyle(
+                                color: const Color(0xffD20D0D),
+                                fontFamily: fontFamily,
+                                fontSize: smallFontSize,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (spamCall.provider != null && spamCall.country != null)
+                        Text(
+                          '${spamCall.provider} • ${spamCall.country}',
+                          style: TextStyle(
+                            color: const Color(0xff848484),
+                            fontFamily: fontFamily,
+                            fontSize: smallFontSize,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                    ],
                   ),
-                  Text(
-                    '11:15 am',
-                    style: TextStyle(
-                      color: const Color(0xff848484),
-                      fontFamily: fontFamily,
-                      fontSize: smallFontSize,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
           Row(
             children: [
-              Text(
-                'Ignore',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontFamily: fontFamily,
-                  fontSize: smallFontSize,
-                  fontWeight: FontWeight.w600,
+              GestureDetector(
+                onTap: onIgnore,
+                child: Text(
+                  'Ignore',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontFamily: fontFamily,
+                    fontSize: smallFontSize,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               SizedBox(width: size.width * 0.02),
@@ -225,7 +363,7 @@ class ScamCallContainer extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                onPressed: () {},
+                onPressed: onReport,
                 child: Text(
                   'Report',
                   style: TextStyle(

@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/start.dart';
 
 class Splash extends StatefulWidget {
@@ -18,7 +20,7 @@ class _SplashState extends State<Splash> {
         context,
         MaterialPageRoute(
           // Replace 'StartScreen' with your actual start screen widget name
-          builder: (context) => StartScreen(),
+          builder: (context) => FirebaseAuth.instance.currentUser!=null?Home() :StartScreen(),
         ),
       );
     });
