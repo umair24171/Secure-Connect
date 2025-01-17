@@ -52,6 +52,9 @@ dependencies:
   phone_state_background: ^0.0.4
   flutter_windowmanager: ^0.2.0
   connectivity_plus: ^6.1.2
+  flutter_background_service: ^5.1.0
+  flutter_background_service_android: ^6.3.0
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:

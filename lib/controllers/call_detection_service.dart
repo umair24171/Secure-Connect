@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:call_log/call_log.dart';
 import 'package:flutter/material.dart';
 import 'package:phone_state/phone_state.dart';
@@ -9,32 +11,144 @@ import 'package:secureconnect/models/caller_info.dart';
 import 'package:secureconnect/screens/alert.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
-// Global callback for background events
+// // Global callback for background events
+// @pragma('vm:entry-point')
+// Future<void> phoneStateBackgroundCallbackHandler(
+//   PhoneStateBackgroundEvent event,
+//   String number,
+//   int duration,
+// ) async {
+//   // Initialize services for background handling
+//   final callDetectionService = CallDetectionService();
+//   await callDetectionService.initializeBackground();
+
+//   switch (event) {
+//     case PhoneStateBackgroundEvent.incomingstart:
+//     case PhoneStateBackgroundEvent.outgoingstart:
+//       await callDetectionService.handleCall(number, 
+//           isIncoming: event == PhoneStateBackgroundEvent.incomingstart);
+//       break;
+//     case PhoneStateBackgroundEvent.incomingend:
+//     case PhoneStateBackgroundEvent.outgoingend:
+//       await callDetectionService.handleCallEnd();
+//       break;
+//     default:
+//       print('Call event: ${event.toString()}, number: $number, duration: $duration s');
+//       break;
+//   }
+// }
+@pragma('vm:entry-point')
+void backgroundServiceHandler() async {
+  final service = FlutterBackgroundService();
+  
+  // Initialize service
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onServiceStart,
+      autoStart: true,
+      isForegroundMode: true,
+      initialNotificationTitle: 'Call Detection Service',
+      initialNotificationContent: 'Running in background',
+    ),
+    iosConfiguration: IosConfiguration(),
+  );
+}
+
+@pragma('vm:entry-point')
+Future<void> onServiceStart(ServiceInstance service) async {
+  if (service is AndroidServiceInstance) {
+    service.setAsForegroundService();
+  }
+  
+  await initializeCallDetection();
+}
+
+// Add the missing initialization function
+Future<void> initializeCallDetection() async {
+  // Initialize notifications
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+      
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+      
+  const InitializationSettings initializationSettings =
+      InitializationSettings(android: initializationSettingsAndroid);
+      
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (NotificationResponse response) async {
+      if (response.payload == 'alert_screen') {
+        // Handle notification tap
+      }
+    },
+  );
+
+  // Request necessary permissions
+  await Future.wait([
+    Permission.phone.request(),
+    Permission.notification.request(),
+    PhoneStateBackground.checkPermission(),
+  ]);
+
+  // Initialize phone state background handler
+  await PhoneStateBackground.initialize(phoneStateBackgroundCallbackHandler);
+}
+
 @pragma('vm:entry-point')
 Future<void> phoneStateBackgroundCallbackHandler(
   PhoneStateBackgroundEvent event,
   String number,
   int duration,
 ) async {
-  // Initialize services for background handling
   final callDetectionService = CallDetectionService();
   await callDetectionService.initializeBackground();
 
   switch (event) {
     case PhoneStateBackgroundEvent.incomingstart:
     case PhoneStateBackgroundEvent.outgoingstart:
-      await callDetectionService.handleCall(number, 
-          isIncoming: event == PhoneStateBackgroundEvent.incomingstart);
+      // Launch app and show alert
+      await _launchApp();
+      await callDetectionService.handleCall(
+        number, 
+        isIncoming: event == PhoneStateBackgroundEvent.incomingstart
+      );
       break;
     case PhoneStateBackgroundEvent.incomingend:
     case PhoneStateBackgroundEvent.outgoingend:
       await callDetectionService.handleCallEnd();
       break;
     default:
-      print('Call event: ${event.toString()}, number: $number, duration: $duration s');
       break;
   }
+}
+
+Future<void> _launchApp() async {
+  final notificationsPlugin = FlutterLocalNotificationsPlugin();
+  
+  const androidDetails = AndroidNotificationDetails(
+    'call_detection_channel',
+    'Call Detection',
+    importance: Importance.max,
+    priority: Priority.high,
+    fullScreenIntent: true, // This is crucial for launching on locked screen
+    showWhen: true,
+  );
+
+  const notificationDetails = NotificationDetails(android: androidDetails);
+  
+  await notificationsPlugin.show(
+    0,
+    'Incoming Call',
+    'Tap to view caller details',
+    notificationDetails,
+    payload: 'alert_screen',
+  );
 }
 
 class CallDetectionService {
@@ -42,24 +156,21 @@ class CallDetectionService {
   final CallerApiService _callerApiService = CallerApiService();
   late Database database;
   bool _isAlertScreenShowing = false;
-  
+  Timer? _screenTimer;
   factory CallDetectionService() => _instance;
   CallDetectionService._internal();
 
-  // Initialize for background operations
-  Future<void> initializeBackground() async {
-    await _initDatabase();
+ Future<void> initialize(BuildContext context) async {
+  // _showAlertScreen('3265280976', true);
+await  _initPermissions();
+    await initializeBackground();
+    await _initPhoneStateListener();
+     backgroundServiceHandler();
   }
 
-  // Initialize for foreground operations
-  Future<void> initialize(BuildContext context) async {
-      // _showAlertScreen('3067128817', true);
+  Future<void> initializeBackground() async {
     await _initDatabase();
-    await _initPermissions();
-    await _initPhoneStateListener();
-
-  
-    await PhoneStateBackground.initialize(phoneStateBackgroundCallbackHandler);
+    await _requestPermissions();
   }
 
   Future<void> _initPermissions() async {
@@ -73,6 +184,15 @@ class CallDetectionService {
         print('Warning: Not all permissions granted. Some features may not work.');
       }
     }
+  }
+   Future<void> _requestPermissions() async {
+    await PhoneStateBackground.checkPermission();
+    await PhoneStateBackground.requestPermissions();
+    
+    // Request other necessary permissions
+    final notificationsPlugin = FlutterLocalNotificationsPlugin();
+    await notificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
   }
 
   Future<void> _initPhoneStateListener() async {
@@ -90,41 +210,62 @@ class CallDetectionService {
     });
   }
 
-  Future<void> handleCall(String phoneNumber, {required bool isIncoming}) async {
+ Future<void> handleCall(String phoneNumber, {required bool isIncoming}) async {
     try {
-      // Get caller info from API
+      // Keep screen on
+      await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
+      await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_TURN_SCREEN_ON);
+      await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
+      
+      // Cancel any existing timer
+      _screenTimer?.cancel();
+
       final callerInfo = await _callerApiService.getNumberInfo(phoneNumber);
       
       if (callerInfo?.isSpam == true) {
         await _logSpamCall(phoneNumber, isIncoming, callerInfo!);
       }
 
-      // Show alert using global navigator key
       await _showAlertScreen(phoneNumber, isIncoming);
+      
+      // Start a longer timer to keep screen alive
+      _screenTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+        await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
+      });
+      
     } catch (e) {
       print('Error handling call: $e');
     }
   }
 
-  Future<void> handleCallEnd() async {
+   Future<void> handleCallEnd() async {
+    _screenTimer?.cancel();
     if (_isAlertScreenShowing && navigatorKey.currentState != null) {
       navigatorKey.currentState!.pop();
       _isAlertScreenShowing = false;
     }
+    await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
   }
 
-  Future<void> _showAlertScreen(String phoneNumber, bool isIncoming) async {
+ Future<void> _showAlertScreen(String phoneNumber, bool isIncoming) async {
     if (!_isAlertScreenShowing && navigatorKey.currentState != null) {
       _isAlertScreenShowing = true;
+      
       try {
         await showDialog(
           context: navigatorKey.currentState!.context,
           barrierDismissible: false,
+          useSafeArea: false, // Allow full screen display
           builder: (BuildContext dialogContext) => WillPopScope(
             onWillPop: () async => false,
             child: AlertScreen(
               phoneNumber: phoneNumber,
               callType: isIncoming ? CallType.incoming : CallType.outgoing,
+              // onDismiss: () {
+              //   _screenTimer?.cancel();
+              //   _isAlertScreenShowing = false;
+              //   Navigator.of(dialogContext).pop();
+              // },
             ),
           ),
         );

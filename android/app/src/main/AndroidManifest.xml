@@ -48,6 +48,11 @@
         <action android:name="android.intent.action.PHONE_STATE" />
     </intent-filter>
 </receiver>
+ <service
+    android:name="com.dexterous.flutterLocalNotifications.ForegroundService"
+    android:exported="false"
+    android:stopWithTask="false"
+    android:foregroundServiceType="phoneCall"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
