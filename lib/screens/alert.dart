@@ -1,6 +1,6 @@
+import 'package:call_log/call_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_windowmanager/flutter_windowmanager.dart';
-import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/controllers/caller_api_service.dart';
 import 'package:secureconnect/models/caller_info.dart';
 
@@ -95,69 +95,69 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver{
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    return WillPopScope(
-      onWillPop: () async => false, // Prevent back button
-      child: Scaffold(
-        backgroundColor: const Color(0xff66C7F4),
-        body: SafeArea(
-          child: Container(
-            color: const Color(0xff66C7F4),
-            width: double.infinity,
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                : Column(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            SizedBox(height: size.height * 0.05),
-                            Container(
-                              height: size.width * 0.2,
-                              width: size.width * 0.2,
-                              decoration: const BoxDecoration(
-                                color: Color(0xffDFF6FF),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.person_2_outlined,
-                                  size: 55,
-                                  color: Colors.black,
+      return WillPopScope(
+        onWillPop: () async => false, // Prevent back button
+        child: Scaffold(
+          backgroundColor: const Color(0xff66C7F4),
+          body: SafeArea(
+            child: Container(
+              color: const Color(0xff66C7F4),
+              width: double.infinity,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              SizedBox(height: size.height * 0.05),
+                              Container(
+                                height: size.width * 0.2,
+                                width: size.width * 0.2,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xffDFF6FF),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.person_2_outlined,
+                                    size: 55,
+                                    color: Colors.black,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              _callerInfo?.name ?? 'Unknown Number',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontFamily: fontFamily,
-                                fontSize: size.width * 0.05,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              widget.phoneNumber,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontFamily: fontFamily,
-                                fontSize: size.width * 0.045,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (_callerInfo?.provider != null) ...[
                               const SizedBox(height: 10),
                               Text(
-                                '${_callerInfo?.provider} - ${_callerInfo?.country}',
+                                _callerInfo?.name ?? 'Unknown Number',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontFamily: fontFamily,
-                                  fontSize: size.width * 0.04,
-                                  fontWeight: FontWeight.w400,
+                                  fontSize: size.width * 0.05,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ],
+                              const SizedBox(height: 10),
+                              Text(
+                                widget.phoneNumber,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: fontFamily,
+                                  fontSize: size.width * 0.045,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (_callerInfo?.provider != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  '${_callerInfo?.provider} - ${_callerInfo?.country}',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: fontFamily,
+                                    fontSize: size.width * 0.04,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
                             const SizedBox(height: 16),
                             if (_callerInfo?.isSpam == true || _callerInfo?.spamCount != 0)
                               Row(
