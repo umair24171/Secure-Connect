@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer';
+import 'dart:io';
 
 import 'package:call_log/call_log.dart';
 import 'package:flutter/material.dart';
@@ -13,35 +16,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
-// // Global callback for background events
-// @pragma('vm:entry-point')
-// Future<void> phoneStateBackgroundCallbackHandler(
-//   PhoneStateBackgroundEvent event,
-//   String number,
-//   int duration,
-// ) async {
-//   // Initialize services for background handling
-//   final callDetectionService = CallDetectionService();
-//   await callDetectionService.initializeBackground();
-
-//   switch (event) {
-//     case PhoneStateBackgroundEvent.incomingstart:
-//     case PhoneStateBackgroundEvent.outgoingstart:
-//       await callDetectionService.handleCall(number, 
-//           isIncoming: event == PhoneStateBackgroundEvent.incomingstart);
-//       break;
-//     case PhoneStateBackgroundEvent.incomingend:
-//     case PhoneStateBackgroundEvent.outgoingend:
-//       await callDetectionService.handleCallEnd();
-//       break;
-//     default:
-//       print('Call event: ${event.toString()}, number: $number, duration: $duration s');
-//       break;
-//   }
-// }
 @pragma('vm:entry-point')
 void backgroundServiceHandler() async {
   final service = FlutterBackgroundService();
@@ -160,12 +136,51 @@ class CallDetectionService {
   factory CallDetectionService() => _instance;
   CallDetectionService._internal();
 
- Future<void> initialize(BuildContext context) async {
-  // _showAlertScreen('3265280976', true);
-await  _initPermissions();
+  Future<void> initialize(BuildContext context) async {
+    await _initPermissions();
     await initializeBackground();
     await _initPhoneStateListener();
-     backgroundServiceHandler();
+    await _initializeNotifications();
+    backgroundServiceHandler();
+  }
+  Future<void> _initializeNotifications() async {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = 
+        FlutterLocalNotificationsPlugin();
+    
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        final payload = response.payload;
+        if (payload != null) {
+          final data = json.decode(payload);
+          await _handleNotificationTap(data);
+        }
+      },
+    );
+  }
+   Future<void> _handleNotificationTap(Map<String, dynamic> data) async {
+    if (data['type'] == 'call_alert' && !_isAlertScreenShowing) {
+      final phoneNumber = data['phoneNumber'];
+      final isIncoming = data['isIncoming'];
+      
+      if (navigatorKey.currentState != null) {
+        await Navigator.push(
+          navigatorKey.currentState!.context,
+          MaterialPageRoute(
+            builder: (context) => AlertScreen(
+              phoneNumber: phoneNumber,
+              callType: isIncoming ? CallType.incoming : CallType.outgoing,
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> initializeBackground() async {
@@ -181,7 +196,7 @@ await  _initPermissions();
     
     for (var status in permissions) {
       if (!status.isGranted) {
-        print('Warning: Not all permissions granted. Some features may not work.');
+        log('Warning: Not all permissions granted. Some features may not work.');
       }
     }
   }
@@ -210,33 +225,127 @@ await  _initPermissions();
     });
   }
 
- Future<void> handleCall(String phoneNumber, {required bool isIncoming}) async {
+Future<void> handleCall(String phoneNumber, {required bool isIncoming}) async {
     try {
       // Keep screen on
       await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
       await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_TURN_SCREEN_ON);
       await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
       
-      // Cancel any existing timer
       _screenTimer?.cancel();
 
       final callerInfo = await _callerApiService.getNumberInfo(phoneNumber);
+      
+      // Show notification with caller info
+      await _showCallerNotification(phoneNumber, isIncoming, callerInfo);
       
       if (callerInfo?.isSpam == true) {
         await _logSpamCall(phoneNumber, isIncoming, callerInfo!);
       }
 
-      await _showAlertScreen(phoneNumber, isIncoming);
+      // Only show alert screen if app is in foreground
+      if (!Platform.isAndroid || await isAppInForeground()) {
+        await _showAlertScreen(phoneNumber, isIncoming);
+      }
       
-      // Start a longer timer to keep screen alive
       _screenTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
         await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
       });
       
     } catch (e) {
-      print('Error handling call: $e');
+      log('Error handling call: $e');
     }
   }
+   Future<void> _showCallerNotification(
+    String phoneNumber, 
+    bool isIncoming, 
+    CallerInfo? callerInfo
+  ) async {
+    final notificationsPlugin = FlutterLocalNotificationsPlugin();
+    
+    final androidDetails = AndroidNotificationDetails(
+      'call_detection_channel',
+      'Call Detection',
+      channelDescription: 'Notifications for incoming and outgoing calls',
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      showWhen: true,
+      category: AndroidNotificationCategory.call,
+      styleInformation: BigTextStyleInformation(
+        _buildNotificationText(callerInfo, phoneNumber, isIncoming),
+      ),
+    );
+
+    final notificationDetails = NotificationDetails(android: androidDetails);
+    
+    final payload = json.encode({
+      'type': 'call_alert',
+      'phoneNumber': phoneNumber,
+      'isIncoming': isIncoming,
+    });
+
+    await notificationsPlugin.show(
+      0,
+      _getNotificationTitle(isIncoming),
+      _buildNotificationText(callerInfo, phoneNumber, isIncoming),
+      notificationDetails,
+      payload: payload,
+    );
+  }
+
+  String _getNotificationTitle(bool isIncoming) {
+    return isIncoming ? 'Incoming Call' : 'Outgoing Call';
+  }
+
+  String _buildNotificationText(
+    CallerInfo? callerInfo, 
+    String phoneNumber,
+    bool isIncoming,
+  ) {
+    final buffer = StringBuffer();
+    
+    if (callerInfo?.name != null) {
+      buffer.writeln('Name: ${callerInfo!.name}');
+    }
+    
+    buffer.writeln('Number: $phoneNumber');
+    
+    if (callerInfo?.provider != null) {
+      buffer.writeln('Provider: ${callerInfo!.provider}');
+    }
+    
+    if (callerInfo?.isSpam == true) {
+      buffer.writeln('⚠️ Potential spam call');
+      if (callerInfo?.spamCount != 0) {
+        buffer.writeln('Reported ${callerInfo!.spamCount} times');
+      }
+    }
+    
+    buffer.writeln('\nTap to view more details');
+    
+    return buffer.toString();
+  }
+
+  Future<bool> isAppInForeground() async {
+    final lifecycleState = await _getAppLifecycleState();
+    return lifecycleState == AppLifecycleState.resumed;
+  }
+
+  Future<AppLifecycleState> _getAppLifecycleState() async {
+    final completer = Completer<AppLifecycleState>();
+    
+    // Use a timer to ensure we get a value even if no state change occurs
+    Timer(const Duration(milliseconds: 100), () {
+      if (!completer.isCompleted) {
+        completer.complete(WidgetsBinding.instance.lifecycleState ?? 
+                         AppLifecycleState.detached);
+      }
+    });
+    
+    return completer.future;
+  }
+
 
    Future<void> handleCallEnd() async {
     _screenTimer?.cancel();
@@ -261,16 +370,12 @@ await  _initPermissions();
             child: AlertScreen(
               phoneNumber: phoneNumber,
               callType: isIncoming ? CallType.incoming : CallType.outgoing,
-              // onDismiss: () {
-              //   _screenTimer?.cancel();
-              //   _isAlertScreenShowing = false;
-              //   Navigator.of(dialogContext).pop();
-              // },
+              
             ),
           ),
         );
       } catch (e) {
-        print('Error showing alert screen: $e');
+        log('Error showing alert screen: $e');
         _isAlertScreenShowing = false;
       }
     }
@@ -320,7 +425,7 @@ await  _initPermissions();
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   } catch (e) {
-    print('Error logging spam call: $e');
+    log('Error logging spam call: $e');
   }
 }
 
