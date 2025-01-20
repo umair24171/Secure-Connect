@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:phone_state_background/phone_state_background.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/screens/alert.dart';
@@ -24,7 +25,7 @@ class _HomeState extends State<Home> {
    @override
 void initState() {
   super.initState();
-  CallDetectionService().initialize(context);
+  // CallDetectionService().initialize(context);
 }
 
   @override
@@ -100,17 +101,28 @@ void initState() {
                     ScamDetection(size: size),
                     SizedBox(height: size.height * 0.03),
                     InkWell(
-                      onTap: () {
-                        // Navigator.push(
-                        //     context,
-                        //     MaterialPageRoute(
-                        //         builder: (context) => AlertScreen()));
+                      onTap: () async{
+                        await FlutterOverlayWindow.closeOverlay();
+                        await FlutterOverlayWindow.showOverlay(
+          // height: WindowSize.fullCover,
+          // width: WindowSize.matchParent,
+          // alignment: OverlayAlignment.center,
+          // visibility: NotificationVisibility.visibilityPublic,
+          // flag: OverlayFlag.defaultFlag , // Added flag to allow dismissing
+          // overlayTitle: "Call Alert",
+          // overlayContent: " 'Incoming' : 'Outgoing'} Call: 3067128817",
+          // enableDrag: true,
+          // positionGravity: PositionGravity.right,
+        );
+         /// Update the overlay size in the screen
+ await FlutterOverlayWindow.resizeOverlay(200, 400,true);
                       },
                       child: CallButton(
                         image: 'assets/images/outcall.png',
                         text: 'Outgoing calls',
                         size: size,
                       ),
+
                     ),
                     SizedBox(height: size.height * 0.02),
                     CallButton(

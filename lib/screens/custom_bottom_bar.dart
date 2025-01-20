@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/screens/calls.dart';
 import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/settings.dart';
@@ -20,6 +21,16 @@ class _CustomBottomBarState extends State<CustomBottomBar> {
     const Center(child: Text('Stats')),    // Replace with your Statistics screen
     Settings(), // Replace with your Settings screen
   ];
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    init();
+  }
+  init()async{
+await initializeCallService();
+  }
 
   @override
   Widget build(BuildContext context) {

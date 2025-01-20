@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/screens/custom_bottom_bar.dart';
 import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/start.dart';
@@ -28,8 +29,10 @@ class _SplashState extends State<Splash> {
         ),
       );
     });
- 
+    
+//  init();
   }
+  
 
   @override
   Widget build(BuildContext context) {
