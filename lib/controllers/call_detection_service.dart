@@ -1,16 +1,18 @@
 import 'dart:async';
 import 'dart:developer';
+// import 'package:dash_bubble/dash_bubble.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart' as overlay;
 import 'package:phone_state/phone_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:secureconnect/main.dart';
-
 import 'package:secureconnect/screens/alert.dart';
 
 @pragma('vm:entry-point')
 void onServiceStart(ServiceInstance service) async {
+  log('onService start');
   try {
     if (service is AndroidServiceInstance) {
       service.setAsForegroundService();
@@ -26,13 +28,16 @@ void onServiceStart(ServiceInstance service) async {
       try {
         switch (event.status) {
           case PhoneStateStatus.CALL_INCOMING:
-            await CallService._handleIncomingCall(event.number!, service);
+          await CallService()._showOverlay();
+            // await CallService._handleIncomingCall(event.number!, service);
             break;
           case PhoneStateStatus.CALL_STARTED:
-            await CallService._handleCallStarted(event.number!, service);
+           await CallService()._showOverlay();
+            // await CallService._handleCallStarted(event.number!, service);
             break;
           case PhoneStateStatus.CALL_ENDED:
-            await CallService._handleCallEnded(service);
+           await CallService()._showOverlay();
+            // await CallService._handleCallEnded(service);
             break;
           default:
             break;
@@ -46,7 +51,6 @@ void onServiceStart(ServiceInstance service) async {
   }
 }
 
-
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
@@ -58,16 +62,15 @@ class CallService {
   CallService._internal();
 
   bool _isInitialized = false;
+  bool _bubblePermissionGranted = false;
 
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    // if (_isInitialized) return;
 
     try {
-      // Request permissions first
       await _requestPermissions();
-      
-      // Only proceed with initialization if permissions are granted
       await _initializeNotifications();
+      // await _initializeBubble();
       await _startBackgroundService();
       _isInitialized = true;
     } catch (e) {
@@ -75,45 +78,183 @@ class CallService {
       rethrow;
     }
   }
+  Future<void> _showOverlay() async {
+  if (await overlay.FlutterOverlayWindow.isActive()) return;
 
-   Future<void> _requestPermissions() async {
-    // First request notification permission separately as it's critical
+  // Set overlay size and position
+  final size = await overlay.FlutterOverlayWindow.showOverlay(
+    enableDrag: true,
+    overlayTitle: "Call Overlay",
+    overlayContent: "Active Call",
+    flag: overlay.OverlayFlag.defaultFlag,
+    alignment: overlay.OverlayAlignment.topCenter,
+    visibility: overlay.NotificationVisibility.visibilityPublic,
+    positionGravity: overlay.PositionGravity.auto,
+    width: overlay.WindowSize.matchParent,
+    height: overlay.WindowSize.matchParent,
+    // This builds your overlay UI
+    // builder: (context) => CallOverlayWidget(),
+  );
+
+  // Handle overlay tap events if needed
+  // FlutterOverlayWindow.overlayListener.listen((event) {
+  //   // Handle overlay interactions
+  //   switch (event) {
+  //     case OverlayTapEvent.onClick:
+  //       // Handle click event
+  //       break;
+  //     case OverlayTapEvent.onLongPress:
+  //       // Handle long press
+  //       break;
+  //     default:
+  //       break;
+  //   }
+  // });
+}
+
+Future<void> _hideOverlay() async {
+  if (await overlay.FlutterOverlayWindow.isActive()) {
+    await overlay.FlutterOverlayWindow.closeOverlay();
+  }
+}
+
+  Future<void> _initializeBubble() async {
+    try {
+      // First check if we already have the permission
+      // bool? hasPermission = await DashBubble.instance.hasOverlayPermission();
+
+      // if (hasPermission != true) {
+        // Request permission if we don't have it
+        // final status = await DashBubble.instance.requestOverlayPermission();
+        // _bubblePermissionGranted = status;
+
+        // if (!status) {
+        //   throw Exception('Overlay permission is required for call bubbles');
+        // }
+      // } else {
+      //   _bubblePermissionGranted = true;
+      // }
+    } catch (e) {
+      log('Error initializing bubble: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _requestPermissions() async {
     final notificationStatus = await Permission.notification.request();
     if (notificationStatus.isDenied) {
       throw Exception('Notification permission is required');
     }
 
-    // Request other permissions
     Map<Permission, PermissionStatus> statuses = await [
       Permission.phone,
       Permission.contacts,
-      // Permission.contacts,
       Permission.notification,
       Permission.systemAlertWindow,
     ].request();
 
-    // Check if any permission is permanently denied
-    bool isPermanentlyDenied = statuses.values.any((status) => status.isPermanentlyDenied);
+    bool isPermanentlyDenied =
+        statuses.values.any((status) => status.isPermanentlyDenied);
     if (isPermanentlyDenied) {
-      // Open app settings if any permission is permanently denied
       await openAppSettings();
       throw Exception('Please grant required permissions in settings');
     }
 
-    // Check if all permissions are granted
     bool allGranted = statuses.values.every((status) => status.isGranted);
     if (!allGranted) {
       throw Exception('Required permissions not granted');
     }
 
-    // Request battery optimization permission separately
-    if (await Permission.ignoreBatteryOptimizations.status.isDenied) {
-      await Permission.ignoreBatteryOptimizations.request();
-    }
+    await Permission.ignoreBatteryOptimizations.request();
+    await Permission.systemAlertWindow.request();
+  }
 
-    // Request system alert window permission separately if needed
-    if (await Permission.systemAlertWindow.status.isDenied) {
-      await Permission.systemAlertWindow.request();
+  static Future<void> showCallBubble(String phoneNumber) async {
+    try {
+      // Check permission before showing bubble
+      // bool? hasPermission = await DashBubble.instance.hasOverlayPermission();
+      // if (hasPermission != true) {
+      //   bool granted = await DashBubble.instance.requestOverlayPermission();
+      //   if (!granted) {
+      //     log('Cannot show bubble: overlay permission denied');
+      //     return;
+      //   }
+      // }
+
+      // Stop any existing bubble before starting a new one
+      // await DashBubble.instance.stopBubble();
+
+      // Start the new bubble with retry logic
+      int retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          // await DashBubble.instance.startBubble(
+          //   bubbleOptions: BubbleOptions(
+          //     bubbleIcon: 'ic_launcher',
+          //     startLocationX: 0,
+          //     startLocationY: 100,
+          //     bubbleSize: 60,
+          //     opacity: 1.0,
+          //     enableClose: true,
+          //     closeBehavior: CloseBehavior.following,
+          //     distanceToClose: 100,
+          //     enableAnimateToEdge: true,
+          //     enableBottomShadow: true,
+          //     keepAliveWhenAppExit: true,
+          //   ),
+          //   onTap: () {
+          //     Navigator.push(
+          //       navigatorKey.currentState!.context,
+          //       MaterialPageRoute(
+          //         builder: (context) => AlertScreen(
+          //           phoneNumber: phoneNumber,
+          //           callType: CallScreenType.incoming,
+          //         ),
+          //       ),
+          //     );
+          //   },
+          // );
+          break; // Break the loop if successful
+        } catch (e) {
+          retryCount++;
+          log('Error showing bubble (attempt $retryCount): $e');
+          if (retryCount == maxRetries) {
+            throw Exception('Failed to show bubble after $maxRetries attempts');
+          }
+          await Future.delayed(
+              Duration(milliseconds: 500 * retryCount)); // Exponential backoff
+        }
+      }
+    } catch (e) {
+      log('Error in _showCallBubble: $e');
+      // Handle the error appropriately - maybe show a notification instead
+      await _showNotification(phoneNumber);
+    }
+  }
+
+  static Future<void> _hideCallBubble() async {
+    try {
+      // Add retry logic for stopping bubble
+      int retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          // await DashBubble.instance.stopBubble();
+          break;
+        } catch (e) {
+          retryCount++;
+          log('Error hiding bubble (attempt $retryCount): $e');
+          if (retryCount == maxRetries) {
+            throw Exception('Failed to hide bubble after $maxRetries attempts');
+          }
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        }
+      }
+    } catch (e) {
+      log('Error in _hideCallBubble: $e');
     }
   }
 
@@ -188,6 +329,8 @@ class CallService {
     );
   }
 
+
+
   // @pragma('vm:entry-point')
   // static void _onServiceStart(ServiceInstance service) async {
   //   try {
@@ -233,6 +376,7 @@ class CallService {
   static Future<void> _handleIncomingCall(
       String phoneNumber, ServiceInstance service) async {
     try {
+      await showCallBubble(phoneNumber);
       await _showNotification(phoneNumber);
 
       if (service is AndroidServiceInstance) {
@@ -242,7 +386,6 @@ class CallService {
         );
       }
 
-      // Check if number is spam
       final isSpam = await _checkIfSpam(phoneNumber);
       if (isSpam) {
         await _showSpamNotification(phoneNumber);
@@ -268,6 +411,7 @@ class CallService {
 
   static Future<void> _handleCallEnded(ServiceInstance service) async {
     try {
+      await _hideCallBubble();
       await flutterLocalNotificationsPlugin.cancel(999);
       await flutterLocalNotificationsPlugin.cancel(1000);
 
@@ -299,7 +443,7 @@ class CallService {
         priority: Priority.high,
         fullScreenIntent: true, // Ensure this is set
         category: AndroidNotificationCategory.call,
-        visibility: NotificationVisibility.public,
+        // visibility: NotificationVisibility.public,
       );
 
       const NotificationDetails notificationDetails = NotificationDetails(

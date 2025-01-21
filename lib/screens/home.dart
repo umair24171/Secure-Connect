@@ -1,10 +1,5 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:phone_state_background/phone_state_background.dart';
-import 'package:secureconnect/controllers/call_detection_service.dart';
-import 'package:secureconnect/screens/alert.dart';
 import 'package:secureconnect/screens/feedback.dart';
 import 'package:secureconnect/screens/settings.dart';
 
@@ -102,20 +97,33 @@ void initState() {
                     SizedBox(height: size.height * 0.03),
                     InkWell(
                       onTap: () async{
-                        await FlutterOverlayWindow.closeOverlay();
+                        // CallService.showCallBubble('030671288817');
+                        // await FlutterOverlayWindow.closeOverlay();
+              // bool? isAllowed=  
+                      
+              if(await FlutterOverlayWindow.isPermissionGranted()){
                         await FlutterOverlayWindow.showOverlay(
-          // height: WindowSize.fullCover,
-          // width: WindowSize.matchParent,
-          // alignment: OverlayAlignment.center,
-          // visibility: NotificationVisibility.visibilityPublic,
-          // flag: OverlayFlag.defaultFlag , // Added flag to allow dismissing
-          // overlayTitle: "Call Alert",
-          // overlayContent: " 'Incoming' : 'Outgoing'} Call: 3067128817",
-          // enableDrag: true,
-          // positionGravity: PositionGravity.right,
-        );
+          height: WindowSize.fullCover,
+          width: WindowSize.matchParent,
+          alignment: OverlayAlignment.center,
+          visibility: NotificationVisibility.visibilityPublic,
+          flag: OverlayFlag.defaultFlag , // Added flag to allow dismissing
+          overlayTitle: "Call Alert",
+          overlayContent: " 'Incoming' : 'Outgoing'} Call: 3067128817",
+          enableDrag: true,
+          positionGravity: PositionGravity.right,
+          
+          
+        );}else{
+           bool? status =await  FlutterOverlayWindow.requestPermission();
+
+        }
+        // / Then, set the overlay content separately using
+await FlutterOverlayWindow.shareData(
+    '<your widget tree here>'
+);
          /// Update the overlay size in the screen
- await FlutterOverlayWindow.resizeOverlay(200, 400,true);
+//  await FlutterOverlayWindow.resizeOverlay(200, 400,true);
                       },
                       child: CallButton(
                         image: 'assets/images/outcall.png',

@@ -61,48 +61,48 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
     }
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _releaseScreenLock();
-    _isDisposed = true;
-    super.dispose();
-  }
+  // @override
+  // void dispose() {
+  //   WidgetsBinding.instance.removeObserver(this);
+  //   _releaseScreenLock();
+  //   _isDisposed = true;
+  //   super.dispose();
+  // }
 
-  Future<void> _keepScreenOn() async {
-    try {
-      // Keep screen on while alert is showing
-      await FlutterWindowManager.addFlags(
-          FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
-      await FlutterWindowManager.addFlags(
-          FlutterWindowManager.FLAG_TURN_SCREEN_ON);
-      await FlutterWindowManager.addFlags(
-          FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
-    } catch (e) {
-      print('Error setting screen flags: $e');
-    }
-  }
+  // Future<void> _keepScreenOn() async {
+  //   try {
+  //     // Keep screen on while alert is showing
+  //     await FlutterWindowManager.addFlags(
+  //         FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
+  //     await FlutterWindowManager.addFlags(
+  //         FlutterWindowManager.FLAG_TURN_SCREEN_ON);
+  //     await FlutterWindowManager.addFlags(
+  //         FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
+  //   } catch (e) {
+  //     print('Error setting screen flags: $e');
+  //   }
+  // }
 
-  Future<void> _releaseScreenLock() async {
-    try {
-      await FlutterWindowManager.clearFlags(
-          FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
-      await FlutterWindowManager.clearFlags(
-          FlutterWindowManager.FLAG_TURN_SCREEN_ON);
-      await FlutterWindowManager.clearFlags(
-          FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
-    } catch (e) {
-      print('Error clearing screen flags: $e');
-    }
-  }
+  // Future<void> _releaseScreenLock() async {
+  //   try {
+  //     await FlutterWindowManager.clearFlags(
+  //         FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
+  //     await FlutterWindowManager.clearFlags(
+  //         FlutterWindowManager.FLAG_TURN_SCREEN_ON);
+  //     await FlutterWindowManager.clearFlags(
+  //         FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
+  //   } catch (e) {
+  //     print('Error clearing screen flags: $e');
+  //   }
+  // }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      _keepScreenOn();
-    }
-  }
+  // @override
+  // void didChangeAppLifecycleState(AppLifecycleState state) {
+  //   super.didChangeAppLifecycleState(state);
+  //   if (state == AppLifecycleState.resumed) {
+  //     _keepScreenOn();
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {

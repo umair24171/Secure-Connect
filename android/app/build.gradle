@@ -12,6 +12,10 @@ android {
     namespace = "com.app.secureconnect"
     compileSdk = 33
     ndkVersion = "25.1.8937393"
+    aaptOptions {
+        cruncherEnabled = false
+        useNewCruncher = false
+    }
 
     compileOptions {
         coreLibraryDesugaringEnabled true  

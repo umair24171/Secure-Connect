@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/controllers/userprovider.dart';
 import 'package:secureconnect/firebase_options.dart';
+import 'package:secureconnect/screens/alert.dart';
 import 'package:secureconnect/screens/splash.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -19,6 +20,16 @@ void main() async {
     
     
     child: const MyApp()));
+}
+@pragma("vm:entry-point")
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: AlertScreen(phoneNumber: '0307128817',callType: CallScreenType.incoming,),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
