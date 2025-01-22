@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:secureconnect/screens/call_logs_screen.dart';
 import 'package:secureconnect/screens/feedback.dart';
 import 'package:secureconnect/screens/settings.dart';
 
@@ -97,35 +98,15 @@ void initState() {
                     SizedBox(height: size.height * 0.03),
                     InkWell(
                       onTap: () async{
-                        // CallService.showCallBubble('030671288817');
-                        // await FlutterOverlayWindow.closeOverlay();
-              // bool? isAllowed=  
-                      
-              if(await FlutterOverlayWindow.isPermissionGranted()){
-                        await FlutterOverlayWindow.showOverlay(
-          height: WindowSize.fullCover,
-          width: WindowSize.matchParent,
-          alignment: OverlayAlignment.center,
-          visibility: NotificationVisibility.visibilityPublic,
-          flag: OverlayFlag.defaultFlag , // Added flag to allow dismissing
-          overlayTitle: "Call Alert",
-          overlayContent: " 'Incoming' : 'Outgoing'} Call: 3067128817",
-          enableDrag: true,
-          positionGravity: PositionGravity.right,
-          
-          
-        );}else{
-           bool? status =await  FlutterOverlayWindow.requestPermission();
-
-        }
-        // / Then, set the overlay content separately using
-await FlutterOverlayWindow.shareData(
-    '<your widget tree here>'
-);
-         /// Update the overlay size in the screen
-//  await FlutterOverlayWindow.resizeOverlay(200, 400,true);
+                         Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CallLogsScreen(callType: "outgoing"),
+      ),
+    );
                       },
                       child: CallButton(
+                        
                         image: 'assets/images/outcall.png',
                         text: 'Outgoing calls',
                         size: size,
@@ -133,16 +114,36 @@ await FlutterOverlayWindow.shareData(
 
                     ),
                     SizedBox(height: size.height * 0.02),
-                    CallButton(
-                      image: 'assets/images/incall.png',
-                      text: 'Incoming calls',
-                      size: size,
+                    InkWell(
+                      onTap: () async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CallLogsScreen(callType: "incoming"),
+      ),
+    );
+  },
+                      child: CallButton(
+                        image: 'assets/images/incall.png',
+                        text: 'Incoming calls',
+                        size: size,
+                      ),
                     ),
                     SizedBox(height: size.height * 0.02),
-                    CallButton(
-                      image: 'assets/images/misscall.png',
-                      text: 'Missed calls',
-                      size: size,
+                    InkWell(
+                       onTap: () async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CallLogsScreen(callType: "missed"),
+      ),
+    );
+  },
+                      child: CallButton(
+                        image: 'assets/images/misscall.png',
+                        text: 'Missed calls',
+                        size: size,
+                      ),
                     ),
                     SizedBox(height: size.height * 0.04),
                     Wrap(

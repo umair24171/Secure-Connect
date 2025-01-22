@@ -1,10 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/controllers/userprovider.dart';
 import 'package:secureconnect/firebase_options.dart';
-import 'package:secureconnect/screens/alert.dart';
+import 'package:secureconnect/screens/overlay_widget.dart';
 import 'package:secureconnect/screens/splash.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -24,10 +23,15 @@ void main() async {
 @pragma("vm:entry-point")
 void overlayMain() {
   WidgetsFlutterBinding.ensureInitialized();
+  print('OVERLAY_DEBUG: Starting overlay main'); 
+  
+ 
   runApp(
-    const MaterialApp(
+ const   MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: AlertScreen(phoneNumber: '0307128817',callType: CallScreenType.incoming,),
+      home: OverlayWidget(
+      
+      ),
     ),
   );
 }
@@ -38,6 +42,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       title: 'Secure Connect',
       theme: ThemeData(

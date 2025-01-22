@@ -1,109 +1,25 @@
-import 'package:call_log/call_log.dart';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
-import 'package:secureconnect/controllers/caller_api_service.dart';
 import 'package:secureconnect/models/caller_info.dart';
 
 // screens/alert_screen.dart
-class AlertScreen extends StatefulWidget {
-  final String phoneNumber;
+class AlertScreen extends StatelessWidget {
+ final String phoneNumber;
   final CallScreenType callType;
   final CallerInfo? callerInfo;
-  const AlertScreen(
-      {super.key,
-      required this.phoneNumber,
-      required this.callType,
-      this.callerInfo});
-
-  @override
-  State<AlertScreen> createState() => _AlertScreenState();
-}
-
-class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
+  final bool isLoading;
   final String fontFamily = 'Roboto';
-  final CallerApiService _callerApiService = CallerApiService();
-  CallerInfo? _callerInfo;
-  bool _isLoading = true;
-  bool _isDisposed = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _fetchCallerInfo();
-    // _keepScreenOn();
-  }
+  const AlertScreen({
+    super.key,
+    required this.phoneNumber,
+    required this.callType,
+    required this.callerInfo,
+    required this.isLoading,
+  });
 
-  Future<void> _fetchCallerInfo() async {
-    if (widget.callerInfo != null) {
-      setState(() {
-        _callerInfo = widget.callerInfo;
-        _isLoading = false;
-      });
-    } else {
-      try {
-        final info = await _callerApiService.getNumberInfo(widget.phoneNumber);
-        if (!_isDisposed) {
-          setState(() {
-            _callerInfo = info;
-            _isLoading = false;
-          });
-        }
-      } catch (e) {
-        if (!_isDisposed) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-        print('Error fetching caller info: $e');
-      }
-    }
-  }
-
-  // @override
-  // void dispose() {
-  //   WidgetsBinding.instance.removeObserver(this);
-  //   _releaseScreenLock();
-  //   _isDisposed = true;
-  //   super.dispose();
-  // }
-
-  // Future<void> _keepScreenOn() async {
-  //   try {
-  //     // Keep screen on while alert is showing
-  //     await FlutterWindowManager.addFlags(
-  //         FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
-  //     await FlutterWindowManager.addFlags(
-  //         FlutterWindowManager.FLAG_TURN_SCREEN_ON);
-  //     await FlutterWindowManager.addFlags(
-  //         FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
-  //   } catch (e) {
-  //     print('Error setting screen flags: $e');
-  //   }
-  // }
-
-  // Future<void> _releaseScreenLock() async {
-  //   try {
-  //     await FlutterWindowManager.clearFlags(
-  //         FlutterWindowManager.FLAG_KEEP_SCREEN_ON);
-  //     await FlutterWindowManager.clearFlags(
-  //         FlutterWindowManager.FLAG_TURN_SCREEN_ON);
-  //     await FlutterWindowManager.clearFlags(
-  //         FlutterWindowManager.FLAG_SHOW_WHEN_LOCKED);
-  //   } catch (e) {
-  //     print('Error clearing screen flags: $e');
-  //   }
-  // }
-
-  // @override
-  // void didChangeAppLifecycleState(AppLifecycleState state) {
-  //   super.didChangeAppLifecycleState(state);
-  //   if (state == AppLifecycleState.resumed) {
-  //     _keepScreenOn();
-  //   }
-  // }
-
+  //   final String fontFamily = 'Roboto';
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -116,7 +32,7 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
           child: Container(
             color: const Color(0xff66C7F4),
             width: double.infinity,
-            child: _isLoading
+            child: isLoading
                 ? const Center(
                     child: CircularProgressIndicator(color: Colors.white))
                 : Column(
@@ -142,7 +58,7 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              _callerInfo?.name ?? 'Unknown Number',
+                              callerInfo?.name ?? 'Unknown Number',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontFamily: fontFamily,
@@ -152,7 +68,7 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              widget.phoneNumber,
+                              phoneNumber,
                               style: TextStyle(
                                 color: Colors.white,
                                 fontFamily: fontFamily,
@@ -160,10 +76,10 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            if (_callerInfo?.provider != null) ...[
+                            if (callerInfo?.provider != null) ...[
                               const SizedBox(height: 10),
                               Text(
-                                '${_callerInfo?.provider} - ${_callerInfo?.country}',
+                                '${callerInfo?.provider} - ${callerInfo?.country}',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontFamily: fontFamily,
@@ -173,8 +89,8 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
                               ),
                             ],
                             const SizedBox(height: 16),
-                            if (_callerInfo?.isSpam == true ||
-                                _callerInfo?.spamCount != 0)
+                            if (callerInfo?.isSpam == true ||
+                                callerInfo?.spamCount != 0)
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -185,7 +101,7 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
-                                    'Scam Alert${_callerInfo?.spamCount != 0 ? ' (${_callerInfo?.spamCount} reports)' : ''}',
+                                    'Scam Alert${callerInfo?.spamCount != 0 ? ' (${callerInfo?.spamCount} reports)' : ''}',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontFamily: fontFamily,
@@ -223,7 +139,7 @@ class _AlertScreenState extends State<AlertScreen> with WidgetsBindingObserver {
                                       context: context,
                                       size: size,
                                       fontFamily: fontFamily,
-                                      phoneNumber: widget.phoneNumber,
+                                      phoneNumber: phoneNumber,
                                     ),
                                   ),
                                 );

@@ -1,18 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
+import 'dart:developer' as developer;
 // import 'package:dash_bubble/dash_bubble.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart' as overlay;
+// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:secureconnect/main.dart';
-import 'package:secureconnect/screens/alert.dart';
 
+// service_handler.dart
 @pragma('vm:entry-point')
 void onServiceStart(ServiceInstance service) async {
-  log('onService start');
+  log('Starting Call Service');
+  
   try {
     if (service is AndroidServiceInstance) {
       service.setAsForegroundService();
@@ -25,291 +26,134 @@ void onServiceStart(ServiceInstance service) async {
         return;
       }
 
+      final callService = CallService();
+      
       try {
         switch (event.status) {
           case PhoneStateStatus.CALL_INCOMING:
-          await CallService()._showOverlay();
-            // await CallService._handleIncomingCall(event.number!, service);
+            log('Incoming call from: ${event.number}');
+            await callService._showOverlay(
+              event.number!,
+              CallScreenType.incoming,
+            );
             break;
+            
           case PhoneStateStatus.CALL_STARTED:
-           await CallService()._showOverlay();
-            // await CallService._handleCallStarted(event.number!, service);
+            log('Call started with: ${event.number}');
+            await callService._showOverlay(
+              event.number!,
+              CallScreenType.outgoing,
+            );
             break;
+            
           case PhoneStateStatus.CALL_ENDED:
-           await CallService()._showOverlay();
-            // await CallService._handleCallEnded(service);
+            log('Call ended');
+            await callService._hideOverlay();
             break;
+            
           default:
+            log('Unhandled phone state: ${event.status}');
             break;
         }
       } catch (e) {
         log('Error handling call state: $e');
       }
     });
+
   } catch (e) {
     log('Error in onServiceStart: $e');
   }
 }
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
 
 enum CallScreenType { incoming, outgoing, missed }
 
+// Initialize service wrapper function
+Future<void> initializeCallService() async {
+  await CallService().initialize();
+}
+
+// call_service.dart
 class CallService {
   static final CallService _instance = CallService._internal();
   factory CallService() => _instance;
   CallService._internal();
 
-  bool _isInitialized = false;
-  bool _bubblePermissionGranted = false;
-
   Future<void> initialize() async {
-    // if (_isInitialized) return;
-
     try {
       await _requestPermissions();
-      await _initializeNotifications();
-      // await _initializeBubble();
       await _startBackgroundService();
-      _isInitialized = true;
+      _initializeOverlayListener();
     } catch (e) {
       log('Error initializing CallService: $e');
       rethrow;
     }
   }
-  Future<void> _showOverlay() async {
-  if (await overlay.FlutterOverlayWindow.isActive()) return;
 
-  // Set overlay size and position
-  final size = await overlay.FlutterOverlayWindow.showOverlay(
-    enableDrag: true,
-    overlayTitle: "Call Overlay",
-    overlayContent: "Active Call",
-    flag: overlay.OverlayFlag.defaultFlag,
-    alignment: overlay.OverlayAlignment.topCenter,
-    visibility: overlay.NotificationVisibility.visibilityPublic,
-    positionGravity: overlay.PositionGravity.auto,
-    width: overlay.WindowSize.matchParent,
-    height: overlay.WindowSize.matchParent,
-    // This builds your overlay UI
-    // builder: (context) => CallOverlayWidget(),
-  );
-
-  // Handle overlay tap events if needed
-  // FlutterOverlayWindow.overlayListener.listen((event) {
-  //   // Handle overlay interactions
-  //   switch (event) {
-  //     case OverlayTapEvent.onClick:
-  //       // Handle click event
-  //       break;
-  //     case OverlayTapEvent.onLongPress:
-  //       // Handle long press
-  //       break;
-  //     default:
-  //       break;
-  //   }
-  // });
-}
-
-Future<void> _hideOverlay() async {
-  if (await overlay.FlutterOverlayWindow.isActive()) {
-    await overlay.FlutterOverlayWindow.closeOverlay();
-  }
-}
-
-  Future<void> _initializeBubble() async {
-    try {
-      // First check if we already have the permission
-      // bool? hasPermission = await DashBubble.instance.hasOverlayPermission();
-
-      // if (hasPermission != true) {
-        // Request permission if we don't have it
-        // final status = await DashBubble.instance.requestOverlayPermission();
-        // _bubblePermissionGranted = status;
-
-        // if (!status) {
-        //   throw Exception('Overlay permission is required for call bubbles');
-        // }
-      // } else {
-      //   _bubblePermissionGranted = true;
-      // }
-    } catch (e) {
-      log('Error initializing bubble: $e');
-      rethrow;
-    }
+  void _initializeOverlayListener() {
+    FlutterOverlayWindow.overlayListener.listen((event) {
+      log("Overlay Event: $event");
+    });
   }
 
   Future<void> _requestPermissions() async {
-    final notificationStatus = await Permission.notification.request();
-    if (notificationStatus.isDenied) {
-      throw Exception('Notification permission is required');
+    final bool overlayStatus = await FlutterOverlayWindow.isPermissionGranted();
+    if (!overlayStatus) {
+      final bool? granted = await FlutterOverlayWindow.requestPermission();
+      if (!granted!) {
+        throw Exception('Overlay permission is required');
+      }
     }
 
     Map<Permission, PermissionStatus> statuses = await [
       Permission.phone,
       Permission.contacts,
-      Permission.notification,
       Permission.systemAlertWindow,
     ].request();
 
-    bool isPermanentlyDenied =
-        statuses.values.any((status) => status.isPermanentlyDenied);
-    if (isPermanentlyDenied) {
-      await openAppSettings();
-      throw Exception('Please grant required permissions in settings');
-    }
-
-    bool allGranted = statuses.values.every((status) => status.isGranted);
-    if (!allGranted) {
+    if (statuses.values.any((status) => status.isDenied)) {
       throw Exception('Required permissions not granted');
     }
-
-    await Permission.ignoreBatteryOptimizations.request();
-    await Permission.systemAlertWindow.request();
   }
 
-  static Future<void> showCallBubble(String phoneNumber) async {
+    Future<void> _showOverlay(String phoneNumber, CallScreenType callType) async {
+    developer.log('Showing overlay for number: $phoneNumber', name: 'call_service');
+    
+    if (await FlutterOverlayWindow.isActive()) {
+      developer.log('Overlay already active, updating data', name: 'call_service');
+      await _updateOverlayData(phoneNumber, callType);
+      return;
+    }
+
     try {
-      // Check permission before showing bubble
-      // bool? hasPermission = await DashBubble.instance.hasOverlayPermission();
-      // if (hasPermission != true) {
-      //   bool granted = await DashBubble.instance.requestOverlayPermission();
-      //   if (!granted) {
-      //     log('Cannot show bubble: overlay permission denied');
-      //     return;
-      //   }
-      // }
+      developer.log('Creating new overlay', name: 'call_service');
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true,
+        overlayTitle: "${callType.toString().split('.').last} Call",
+        overlayContent: "Call from $phoneNumber",
+        flag: OverlayFlag.focusPointer,
+        alignment: OverlayAlignment.topCenter,
+        visibility: NotificationVisibility.visibilityPublic,
+        positionGravity: PositionGravity.auto,
+        width: WindowSize.matchParent,
+        height: 771,
+      );
 
-      // Stop any existing bubble before starting a new one
-      // await DashBubble.instance.stopBubble();
+      developer.log('Overlay created successfully', name: 'call_service');
+      await _updateOverlayData(phoneNumber, callType);
 
-      // Start the new bubble with retry logic
-      int retryCount = 0;
-      const maxRetries = 3;
-
-      while (retryCount < maxRetries) {
-        try {
-          // await DashBubble.instance.startBubble(
-          //   bubbleOptions: BubbleOptions(
-          //     bubbleIcon: 'ic_launcher',
-          //     startLocationX: 0,
-          //     startLocationY: 100,
-          //     bubbleSize: 60,
-          //     opacity: 1.0,
-          //     enableClose: true,
-          //     closeBehavior: CloseBehavior.following,
-          //     distanceToClose: 100,
-          //     enableAnimateToEdge: true,
-          //     enableBottomShadow: true,
-          //     keepAliveWhenAppExit: true,
-          //   ),
-          //   onTap: () {
-          //     Navigator.push(
-          //       navigatorKey.currentState!.context,
-          //       MaterialPageRoute(
-          //         builder: (context) => AlertScreen(
-          //           phoneNumber: phoneNumber,
-          //           callType: CallScreenType.incoming,
-          //         ),
-          //       ),
-          //     );
-          //   },
-          // );
-          break; // Break the loop if successful
-        } catch (e) {
-          retryCount++;
-          log('Error showing bubble (attempt $retryCount): $e');
-          if (retryCount == maxRetries) {
-            throw Exception('Failed to show bubble after $maxRetries attempts');
-          }
-          await Future.delayed(
-              Duration(milliseconds: 500 * retryCount)); // Exponential backoff
-        }
-      }
-    } catch (e) {
-      log('Error in _showCallBubble: $e');
-      // Handle the error appropriately - maybe show a notification instead
-      await _showNotification(phoneNumber);
+    } catch (e, stack) {
+      developer.log(
+        'Error showing overlay',
+        name: 'call_service',
+        error: e,
+        stackTrace: stack
+      );
+      rethrow;
     }
   }
 
-  static Future<void> _hideCallBubble() async {
-    try {
-      // Add retry logic for stopping bubble
-      int retryCount = 0;
-      const maxRetries = 3;
-
-      while (retryCount < maxRetries) {
-        try {
-          // await DashBubble.instance.stopBubble();
-          break;
-        } catch (e) {
-          retryCount++;
-          log('Error hiding bubble (attempt $retryCount): $e');
-          if (retryCount == maxRetries) {
-            throw Exception('Failed to hide bubble after $maxRetries attempts');
-          }
-          await Future.delayed(Duration(milliseconds: 500 * retryCount));
-        }
-      }
-    } catch (e) {
-      log('Error in _hideCallBubble: $e');
-    }
-  }
-
-  Future<void> _initializeNotifications() async {
-    const AndroidNotificationChannel callChannel = AndroidNotificationChannel(
-      'incoming_calls',
-      'Incoming Calls',
-      description: 'Notifications for incoming calls',
-      importance: Importance.max,
-      enableVibration: true,
-      enableLights: true,
-    );
-
-    const AndroidNotificationChannel spamChannel = AndroidNotificationChannel(
-      'spam_calls',
-      'Spam Calls',
-      description: 'Notifications for spam calls',
-      importance: Importance.max,
-      enableVibration: true,
-      enableLights: true,
-    );
-
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(callChannel);
-
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(spamChannel);
-
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const DarwinInitializationSettings initializationSettingsIOS =
-        DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
-
-    await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
-  }
-
-  Future<void> _startBackgroundService() async {
+   Future<void> _startBackgroundService() async {
     final service = FlutterBackgroundService();
 
     await service.configure(
@@ -328,193 +172,431 @@ Future<void> _hideOverlay() async {
       ),
     );
   }
-
-
-
-  // @pragma('vm:entry-point')
-  // static void _onServiceStart(ServiceInstance service) async {
-  //   try {
-  //     if (service is AndroidServiceInstance) {
-  //       service.setAsForegroundService();
-  //       service.setAutoStartOnBootMode(true);
-  //     }
-
-  //     PhoneState.stream.listen((event) async {
-  //       if (event.number == null || event.number!.isEmpty) {
-  //         log('Received call event with empty number');
-  //         return;
-  //       }
-
-  //       try {
-  //         switch (event.status) {
-  //           case PhoneStateStatus.CALL_INCOMING:
-  //             await _handleIncomingCall(event.number!, service);
-  //             break;
-  //           case PhoneStateStatus.CALL_STARTED:
-  //             await _handleCallStarted(event.number!, service);
-  //             break;
-  //           case PhoneStateStatus.CALL_ENDED:
-  //             await _handleCallEnded(service);
-  //             break;
-  //           default:
-  //             break;
-  //         }
-  //       } catch (e) {
-  //         log('Error handling call state: $e');
-  //       }
-  //     });
-  //   } catch (e) {
-  //     log('Error in onServiceStart: $e');
-  //   }
-  // }
-
   @pragma('vm:entry-point')
   static Future<bool> _onIosBackground(ServiceInstance service) async {
     return true;
   }
 
-  static Future<void> _handleIncomingCall(
-      String phoneNumber, ServiceInstance service) async {
+ Future<void> _updateOverlayData(String phoneNumber, CallScreenType callType) async {
     try {
-      await showCallBubble(phoneNumber);
-      await _showNotification(phoneNumber);
-
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: 'Active Call',
-          content: 'Call from $phoneNumber',
-        );
-      }
-
-      final isSpam = await _checkIfSpam(phoneNumber);
-      if (isSpam) {
-        await _showSpamNotification(phoneNumber);
-      }
-    } catch (e) {
-      log('Error handling incoming call: $e');
+      final data = {
+        'phoneNumber': phoneNumber,
+        'callType': callType.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      
+      developer.log('Updating overlay with data: $data', name: 'call_service');
+      await FlutterOverlayWindow.shareData(jsonEncode(data));
+      developer.log('Overlay data updated successfully', name: 'call_service');
+    } catch (e, stack) {
+      developer.log(
+        'Error updating overlay data',
+        name: 'call_service',
+        error: e,
+        stackTrace: stack
+      );
     }
   }
 
-  static Future<void> _handleCallStarted(
-      String phoneNumber, ServiceInstance service) async {
+  Future<void> _hideOverlay() async {
     try {
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: 'Call in Progress',
-          content: 'Connected with $phoneNumber',
-        );
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
       }
     } catch (e) {
-      log('Error handling call start: $e');
-    }
-  }
-
-  static Future<void> _handleCallEnded(ServiceInstance service) async {
-    try {
-      await _hideCallBubble();
-      await flutterLocalNotificationsPlugin.cancel(999);
-      await flutterLocalNotificationsPlugin.cancel(1000);
-
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: 'Call Protection Active',
-          content: 'Monitoring incoming calls',
-        );
-      }
-    } catch (e) {
-      log('Error handling call end: $e');
-    }
-  }
-
-  static Future<bool> _checkIfSpam(String phoneNumber) async {
-    // Implement your spam checking logic here
-    // This is a placeholder implementation
-    return false;
-  }
-
-  static Future<void> _showNotification(String phoneNumber) async {
-    try {
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'incoming_calls',
-        'Incoming Calls',
-        channelDescription: 'Notifications for incoming calls',
-        importance: Importance.max,
-        priority: Priority.high,
-        fullScreenIntent: true, // Ensure this is set
-        category: AndroidNotificationCategory.call,
-        // visibility: NotificationVisibility.public,
-      );
-
-      const NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails,
-      );
-
-      await flutterLocalNotificationsPlugin.show(
-        999,
-        'Incoming Call',
-        'From: $phoneNumber',
-        notificationDetails,
-        payload: phoneNumber,
-      );
-    } catch (e) {
-      log('Error showing notification: $e');
-    }
-  }
-
-  static Future<void> _showSpamNotification(String phoneNumber) async {
-    try {
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'spam_calls',
-        'Spam Calls',
-        channelDescription: 'Notifications for spam calls',
-        importance: Importance.max,
-        priority: Priority.high,
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.call,
-        visibility: NotificationVisibility.public,
-      );
-
-      const NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails,
-      );
-
-      await flutterLocalNotificationsPlugin.show(
-        1000,
-        'Spam Call Warning!',
-        'Suspicious call from: $phoneNumber',
-        notificationDetails,
-        payload: phoneNumber,
-      );
-    } catch (e) {
-      log('Error showing spam notification: $e');
-    }
-  }
-
-  static void _onNotificationTapped(NotificationResponse response) {
-    try {
-      if (response.payload != null) {
-        Navigator.push(
-          navigatorKey.currentState!.context,
-          MaterialPageRoute(
-            builder: (context) => AlertScreen(
-              phoneNumber: response.payload!,
-              callType: CallScreenType.incoming, // Updated to use new enum
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      log('Error handling notification tap: $e');
+      log('Error hiding overlay: $e');
     }
   }
 }
 
-// Initialize service wrapper function
-Future<void> initializeCallService() async {
-  await CallService().initialize();
-}
+// class CallService {
+//   static final CallService _instance = CallService._internal();
+//   factory CallService() => _instance;
+//   CallService._internal();
+
+
+//   Future<void> initialize() async {
+  
+
+//     try {
+//       await _requestPermissions();
+//       await _initializeNotifications();
+//       // await _initializeBubble();
+//       await _startBackgroundService();
+     
+//     } catch (e) {
+//       log('Error initializing CallService: $e');
+//       rethrow;
+//     }
+//   }
+  // Future<void> _startBackgroundService() async {
+  //   final service = FlutterBackgroundService();
+
+  //   await service.configure(
+  //     androidConfiguration: AndroidConfiguration(
+  //       onStart: onServiceStart,
+  //       autoStart: true,
+  //       isForegroundMode: true,
+  //       initialNotificationTitle: 'Call Protection Active',
+  //       initialNotificationContent: 'Monitoring incoming calls',
+  //       foregroundServiceNotificationId: 888,
+  //     ),
+  //     iosConfiguration: IosConfiguration(
+  //       autoStart: true,
+  //       onForeground: onServiceStart,
+  //       onBackground: _onIosBackground,
+  //     ),
+  //   );
+  // }
+//   Future<void> _handleCall(
+//   String phoneNumber,
+//   CallScreenType callType,
+//   CallService callService,
+//   ServiceInstance service,
+// ) async {
+//   try {
+//     // Update service notification
+//     // if (service is AndroidServiceInstance) {
+//     //   _updateServiceNotification(
+//     //     service,
+//     //     '${callType.toString().split('.').last} Call',
+//     //     'Call from $phoneNumber',
+//     //   );
+//     // }
+
+//     // Show or update overlay
+//     await callService._showOverlay(phoneNumber, callType);
+
+//     // Additional call handling (e.g., spam detection, contact lookup, etc.)
+//     final contactInfo = await CallerApiService().getNumberInfo(phoneNumber);
+//     // final spamInfo = await _checkSpamDatabase(phoneNumber);
+    
+//     // Share additional data with overlay
+//     await FlutterOverlayWindow.shareData(
+//       jsonEncode({
+//         'type': 'call_details',
+//         'phoneNumber': phoneNumber,
+//         'callType': callType.toString(),
+//         'contactName': contactInfo!.name,
+//         // 'isSpam': spamInfo.isSpam,
+//         // 'spamScore': spamInfo.score,
+//         'timestamp': DateTime.now().toIso8601String(),
+//       }),
+//     );
+
+//   } catch (e) {
+//     log('Error handling call: $e');
+//     rethrow;
+//   }
+// }
+
+//   Future<void> _showOverlay(String phoneNumber, CallScreenType callType) async {
+//     if (await overlay.FlutterOverlayWindow.isActive()) return;
+
+//     // Pass the call data to the overlay
+//     final params = {
+//       'phoneNumber': phoneNumber,
+//       'callType': callType,
+//     };
+
+//     // Set overlay size and position with the parameters
+//     await overlay.FlutterOverlayWindow.showOverlay(
+//       enableDrag: true,
+//       overlayTitle: "Call Overlay",
+//       overlayContent: "$callType Call from $phoneNumber",
+//       flag: overlay.OverlayFlag.defaultFlag,
+//       alignment: overlay.OverlayAlignment.topCenter,
+//       visibility: overlay.NotificationVisibility.visibilityPublic,
+//       positionGravity: overlay.PositionGravity.auto,
+//       width: overlay.WindowSize.matchParent,
+//       height: overlay.WindowSize.matchParent,
+//       // overlayParams: params,
+//     );
+//   }
+
+// Future<void> _hideOverlay() async {
+//   if (await overlay.FlutterOverlayWindow.isActive()) {
+//     await overlay.FlutterOverlayWindow.closeOverlay();
+//   }
+// }
+
+ 
+
+//   Future<void> _requestPermissions() async {
+//     final notificationStatus = await Permission.notification.request();
+//     if (notificationStatus.isDenied) {
+//       throw Exception('Notification permission is required');
+//     }
+
+//     Map<Permission, PermissionStatus> statuses = await [
+//       Permission.phone,
+//       Permission.contacts,
+//       Permission.notification,
+//       Permission.systemAlertWindow,
+//     ].request();
+
+//     bool isPermanentlyDenied =
+//         statuses.values.any((status) => status.isPermanentlyDenied);
+//     if (isPermanentlyDenied) {
+//       await openAppSettings();
+//       throw Exception('Please grant required permissions in settings');
+//     }
+
+//     bool allGranted = statuses.values.every((status) => status.isGranted);
+//     if (!allGranted) {
+//       throw Exception('Required permissions not granted');
+//     }
+
+//     await Permission.ignoreBatteryOptimizations.request();
+//     await Permission.systemAlertWindow.request();
+//   }
+// void _updateServiceNotification(
+//   ServiceInstance service,
+//   String title,
+//   String content,
+// ) {
+//   if (service is AndroidServiceInstance) {
+//     service.setForegroundNotificationInfo(
+//       title: title,
+//       content: content,
+//     );
+//   }
+// }
+//   Future<void> _initializeNotifications() async {
+//     const AndroidNotificationChannel callChannel = AndroidNotificationChannel(
+//       'incoming_calls',
+//       'Incoming Calls',
+//       description: 'Notifications for incoming calls',
+//       importance: Importance.max,
+//       enableVibration: true,
+//       enableLights: true,
+//     );
+
+//     const AndroidNotificationChannel spamChannel = AndroidNotificationChannel(
+//       'spam_calls',
+//       'Spam Calls',
+//       description: 'Notifications for spam calls',
+//       importance: Importance.max,
+//       enableVibration: true,
+//       enableLights: true,
+//     );
+
+//     await flutterLocalNotificationsPlugin
+//         .resolvePlatformSpecificImplementation<
+//             AndroidFlutterLocalNotificationsPlugin>()
+//         ?.createNotificationChannel(callChannel);
+
+//     await flutterLocalNotificationsPlugin
+//         .resolvePlatformSpecificImplementation<
+//             AndroidFlutterLocalNotificationsPlugin>()
+//         ?.createNotificationChannel(spamChannel);
+
+//     const AndroidInitializationSettings initializationSettingsAndroid =
+//         AndroidInitializationSettings('@mipmap/ic_launcher');
+
+//     const DarwinInitializationSettings initializationSettingsIOS =
+//         DarwinInitializationSettings(
+//       requestAlertPermission: true,
+//       requestBadgePermission: true,
+//       requestSoundPermission: true,
+//     );
+
+//     const InitializationSettings initializationSettings =
+//         InitializationSettings(
+//       android: initializationSettingsAndroid,
+//       iOS: initializationSettingsIOS,
+//     );
+
+//     await flutterLocalNotificationsPlugin.initialize(
+//       initializationSettings,
+//       onDidReceiveNotificationResponse: _onNotificationTapped,
+//     );
+//   }
+
+  
+
+
+//   // @pragma('vm:entry-point')
+//   // static void _onServiceStart(ServiceInstance service) async {
+//   //   try {
+//   //     if (service is AndroidServiceInstance) {
+//   //       service.setAsForegroundService();
+//   //       service.setAutoStartOnBootMode(true);
+//   //     }
+
+//   //     PhoneState.stream.listen((event) async {
+//   //       if (event.number == null || event.number!.isEmpty) {
+//   //         log('Received call event with empty number');
+//   //         return;
+//   //       }
+
+//   //       try {
+//   //         switch (event.status) {
+//   //           case PhoneStateStatus.CALL_INCOMING:
+//   //             await _handleIncomingCall(event.number!, service);
+//   //             break;
+//   //           case PhoneStateStatus.CALL_STARTED:
+//   //             await _handleCallStarted(event.number!, service);
+//   //             break;
+//   //           case PhoneStateStatus.CALL_ENDED:
+//   //             await _handleCallEnded(service);
+//   //             break;
+//   //           default:
+//   //             break;
+//   //         }
+//   //       } catch (e) {
+//   //         log('Error handling call state: $e');
+//   //       }
+//   //     });
+//   //   } catch (e) {
+//   //     log('Error in onServiceStart: $e');
+//   //   }
+//   // }
+
+  // @pragma('vm:entry-point')
+  // static Future<bool> _onIosBackground(ServiceInstance service) async {
+  //   return true;
+  // }
+
+//   static Future<void> _handleIncomingCall(
+//       String phoneNumber, ServiceInstance service) async {
+//     try {
+//       // await showCallBubble(phoneNumber);
+//       await _showNotification(phoneNumber);
+
+//       if (service is AndroidServiceInstance) {
+//         service.setForegroundNotificationInfo(
+//           title: 'Active Call',
+//           content: 'Call from $phoneNumber',
+//         );
+//       }
+
+//       final isSpam = await _checkIfSpam(phoneNumber);
+//       if (isSpam) {
+//         await _showSpamNotification(phoneNumber);
+//       }
+//     } catch (e) {
+//       log('Error handling incoming call: $e');
+//     }
+//   }
+
+//   static Future<void> _handleCallStarted(
+//       String phoneNumber, ServiceInstance service) async {
+//     try {
+//       if (service is AndroidServiceInstance) {
+//         service.setForegroundNotificationInfo(
+//           title: 'Call in Progress',
+//           content: 'Connected with $phoneNumber',
+//         );
+//       }
+//     } catch (e) {
+//       log('Error handling call start: $e');
+//     }
+//   }
+
+//   static Future<void> _handleCallEnded(ServiceInstance service) async {
+//     try {
+//       // await _hideCallBubble();
+//       await flutterLocalNotificationsPlugin.cancel(999);
+//       await flutterLocalNotificationsPlugin.cancel(1000);
+
+//       if (service is AndroidServiceInstance) {
+//         service.setForegroundNotificationInfo(
+//           title: 'Call Protection Active',
+//           content: 'Monitoring incoming calls',
+//         );
+//       }
+//     } catch (e) {
+//       log('Error handling call end: $e');
+//     }
+//   }
+
+//   static Future<bool> _checkIfSpam(String phoneNumber) async {
+//     // Implement your spam checking logic here
+//     // This is a placeholder implementation
+//     return false;
+//   }
+
+//   static Future<void> _showNotification(String phoneNumber) async {
+//     try {
+//       const AndroidNotificationDetails androidDetails =
+//           AndroidNotificationDetails(
+//         'incoming_calls',
+//         'Incoming Calls',
+//         channelDescription: 'Notifications for incoming calls',
+//         importance: Importance.max,
+//         priority: Priority.high,
+//         fullScreenIntent: true, // Ensure this is set
+//         category: AndroidNotificationCategory.call,
+//         // visibility: NotificationVisibility.public,
+//       );
+
+//       const NotificationDetails notificationDetails = NotificationDetails(
+//         android: androidDetails,
+//       );
+
+//       await flutterLocalNotificationsPlugin.show(
+//         999,
+//         'Incoming Call',
+//         'From: $phoneNumber',
+//         notificationDetails,
+//         payload: phoneNumber,
+//       );
+//     } catch (e) {
+//       log('Error showing notification: $e');
+//     }
+//   }
+
+//   static Future<void> _showSpamNotification(String phoneNumber) async {
+//     try {
+//       const AndroidNotificationDetails androidDetails =
+//           AndroidNotificationDetails(
+//         'spam_calls',
+//         'Spam Calls',
+//         channelDescription: 'Notifications for spam calls',
+//         importance: Importance.max,
+//         priority: Priority.high,
+//         fullScreenIntent: true,
+//         category: AndroidNotificationCategory.call,
+//         // visibility: NotificationVisibility.public,
+//       );
+
+//       const NotificationDetails notificationDetails = NotificationDetails(
+//         android: androidDetails,
+//       );
+
+//       await flutterLocalNotificationsPlugin.show(
+//         1000,
+//         'Spam Call Warning!',
+//         'Suspicious call from: $phoneNumber',
+//         notificationDetails,
+//         payload: phoneNumber,
+//       );
+//     } catch (e) {
+//       log('Error showing spam notification: $e');
+//     }
+//   }
+
+//   static void _onNotificationTapped(NotificationResponse response) {
+//     try {
+//       if (response.payload != null) {
+//         Navigator.push(
+//           navigatorKey.currentState!.context,
+//           MaterialPageRoute(
+//             builder: (context) => AlertScreen(
+//               phoneNumber: response.payload!,
+//               callType: CallScreenType.incoming, // Updated to use new enum
+//             ),
+//           ),
+//         );
+//       }
+//     } catch (e) {
+//       log('Error handling notification tap: $e');
+//     }
+//   }
+// }
+
+
 // import 'dart:async';
 // import 'dart:convert';
 // import 'dart:developer';
