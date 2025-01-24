@@ -1,8 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class FeedbackScreen extends StatelessWidget {
-  FeedbackScreen({super.key});
+class FeedbackScreen extends StatefulWidget {
+  const FeedbackScreen({super.key});
+
+  @override
+  _FeedbackScreenState createState() => _FeedbackScreenState();
+}
+
+class _FeedbackScreenState extends State<FeedbackScreen> {
   final String fontFamily = 'Roboto';
+  bool? proceedWithCall;
+  bool? recognizedNumber;
+  double scamAlertAccuracy = 50;
+  List<String> selectedReasons = [];
+
+  Future<void> _submitFeedback() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please log in to submit feedback')),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('call_feedback').add({
+        'userId': user.uid,
+        'proceedWithCall': proceedWithCall,
+        'recognizedNumber': recognizedNumber,
+        'scamAlertAccuracy': scamAlertAccuracy,
+        'reasons': selectedReasons,
+        'submittedAt': FieldValue.serverTimestamp(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Feedback submitted successfully')),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to submit feedback')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +69,7 @@ class FeedbackScreen extends StatelessWidget {
                   vertical: paddingScale * 0.6,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center, // Add this
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
                       height: iconSize * 1.6,
@@ -48,7 +90,7 @@ class FeedbackScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Post call feedback',
-                        textAlign: TextAlign.center, // Add this
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
                           fontFamily: fontFamily,
@@ -72,9 +114,7 @@ class FeedbackScreen extends StatelessWidget {
                   ),
                   child: Container(
                     margin: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                    color: const Color(
-                      0xffDFF6FF,
-                    ),
+                    color: const Color(0xffDFF6FF),
                     child: SingleChildScrollView(
                       child: Padding(
                         padding: EdgeInsets.all(paddingScale),
@@ -87,14 +127,17 @@ class FeedbackScreen extends StatelessWidget {
                             ),
                             SizedBox(height: paddingScale),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment
-                                  .end, // This will align items to the right
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                _buildOptionRow(true, size, fontSize),
-                                SizedBox(
-                                  width: size.height * 0.03,
+                                GestureDetector(
+                                  onTap: () => setState(() => proceedWithCall = true),
+                                  child: _buildOptionRow(true, size, fontSize, proceedWithCall == true),
                                 ),
-                                _buildOptionRow(false, size, fontSize),
+                                SizedBox(width: size.height * 0.03),
+                                GestureDetector(
+                                  onTap: () => setState(() => proceedWithCall = false),
+                                  child: _buildOptionRow(false, size, fontSize, proceedWithCall == false),
+                                ),
                               ],
                             ),
                             _buildDivider(),
@@ -104,14 +147,17 @@ class FeedbackScreen extends StatelessWidget {
                             ),
                             SizedBox(height: paddingScale),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment
-                                  .end, // This will align items to the right
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                _buildOptionRow(true, size, fontSize),
-                                SizedBox(
-                                  width: size.height * 0.03,
+                                GestureDetector(
+                                  onTap: () => setState(() => recognizedNumber = true),
+                                  child: _buildOptionRow(true, size, fontSize, recognizedNumber == true),
                                 ),
-                                _buildOptionRow(false, size, fontSize),
+                                SizedBox(width: size.height * 0.03),
+                                GestureDetector(
+                                  onTap: () => setState(() => recognizedNumber = false),
+                                  child: _buildOptionRow(false, size, fontSize, recognizedNumber == false),
+                                ),
                               ],
                             ),
                             _buildDivider(),
@@ -138,8 +184,12 @@ class FeedbackScreen extends StatelessWidget {
                               child: Slider(
                                 min: 0,
                                 max: 100,
-                                value: 50,
-                                onChanged: (value) {},
+                                value: scamAlertAccuracy,
+                                onChanged: (value) {
+                                  setState(() {
+                                    scamAlertAccuracy = value;
+                                  });
+                                },
                               ),
                             ),
                             _buildDivider(),
@@ -148,9 +198,9 @@ class FeedbackScreen extends StatelessWidget {
                               fontSize,
                             ),
                             SizedBox(height: paddingScale),
-                            _buildCheckboxOption('Trusted source', fontSize),
-                            _buildCheckboxOption('Mistake', fontSize),
-                            _buildCheckboxOption('Urgent need', fontSize),
+                            _buildCheckboxOption('Trusted source', fontSize, 'Trusted source'),
+                            _buildCheckboxOption('Mistake', fontSize, 'Mistake'),
+                            _buildCheckboxOption('Urgent need', fontSize, 'Urgent need'),
                             SizedBox(height: paddingScale * 1.5),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -177,9 +227,7 @@ class FeedbackScreen extends StatelessWidget {
                                       ),
                                       padding: EdgeInsets.symmetric(
                                           vertical: 15, horizontal: 30)),
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                  },
+                                  onPressed: _submitFeedback,
                                   child: Center(
                                     child: Text(
                                       'Submit',
@@ -221,14 +269,14 @@ class FeedbackScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOptionRow(bool isYes, Size size, double fontSize) {
+  Widget _buildOptionRow(bool isYes, Size size, double fontSize, bool isSelected) {
     return Row(
       children: [
         Container(
           height: size.width * 0.04,
           width: size.width * 0.04,
           decoration: BoxDecoration(
-            color: isYes ? const Color(0xff66C7F4) : Colors.white,
+            color: isSelected ? const Color(0xff66C7F4) : Colors.white,
             shape: BoxShape.circle,
           ),
         ),
@@ -246,16 +294,29 @@ class FeedbackScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCheckboxOption(String text, double fontSize) {
+  Widget _buildCheckboxOption(String text, double fontSize, String reason) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
-          Container(
-            height: 20,
-            width: 20,
-            decoration:
-                BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                if (selectedReasons.contains(reason)) {
+                  selectedReasons.remove(reason);
+                } else {
+                  selectedReasons.add(reason);
+                }
+              });
+            },
+            child: Container(
+              height: 20,
+              width: 20,
+              decoration: BoxDecoration(
+                color: selectedReasons.contains(reason) ? const Color(0xff66C7F4) : Colors.white,
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Text(

@@ -4,6 +4,7 @@ import 'package:secureconnect/controllers/account_deletion_controller.dart';
 import 'package:secureconnect/controllers/share_services.dart';
 import 'package:secureconnect/screens/blockcalls.dart';
 import 'package:secureconnect/screens/calls.dart';
+import 'package:secureconnect/screens/help_support.dart';
 import 'package:secureconnect/screens/scamcalls.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -107,8 +108,13 @@ class Settings extends StatelessWidget {
                         SettingsContainer(Icons.privacy_tip_outlined,
                             'Privacy & Policy', '', false),
                         SizedBox(height: size.height * 0.015),
-                        SettingsContainer(Icons.help_outline_outlined,
-                            'Help & Support', '', false),
+                        InkWell(
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context)=>HelpAndSupportScreen()));
+                          },
+                          child: SettingsContainer(Icons.help_outline_outlined,
+                              'Help & Support', '', false),
+                        ),
                         SizedBox(height: size.height * 0.015),
                         InkWell(
                           onTap: ()async {
