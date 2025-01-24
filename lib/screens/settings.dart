@@ -1,7 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:secureconnect/controllers/account_deletion_controller.dart';
+import 'package:secureconnect/controllers/share_services.dart';
 import 'package:secureconnect/screens/blockcalls.dart';
 import 'package:secureconnect/screens/calls.dart';
 import 'package:secureconnect/screens/scamcalls.dart';
+import 'package:share_plus/share_plus.dart';
 
 class Settings extends StatelessWidget {
   Settings({super.key});
@@ -106,31 +110,86 @@ class Settings extends StatelessWidget {
                         SettingsContainer(Icons.help_outline_outlined,
                             'Help & Support', '', false),
                         SizedBox(height: size.height * 0.015),
-                        SettingsContainer(Icons.person_add_alt_1,
-                            'Invite a Friend', '', false),
+                        InkWell(
+                          onTap: ()async {
+                             await ShareServices()
+                                        .referFriend(FirebaseAuth.instance.currentUser?.uid??'')
+                                        .then((value) {
+                                      Share.share(value);
+                                      
+                                    });
+                          },
+                          child: SettingsContainer(Icons.person_add_alt_1,
+                              'Invite a Friend', '', false),
+                        ),
                       ],
                     ),
                   ),
-                  ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Colors.red, // Added color for delete button
-                          padding: EdgeInsets.symmetric(
-                            vertical: size.height * 0.02,
-                          ),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14))),
-                      onPressed: () {},
-                      child: Center(
-                        child: Text(
-                          'Delete account',
-                          style: TextStyle(
-                              color: Color(0xffffffff),
-                              fontFamily: fontFamily,
-                              fontSize: size.width * 0.045,
-                              fontWeight: FontWeight.w500),
-                        ),
-                      )),
+                 ElevatedButton(
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red,
+    padding: EdgeInsets.symmetric(
+      vertical: size.height * 0.02,
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14)
+    )
+  ),
+  onPressed: () async {
+    // Show confirmation dialog
+    bool? confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Account'),
+        content: Text('Are you sure you want to delete your account? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmDelete == true) {
+      AccountDeletionService deletionService = AccountDeletionService();
+      bool success = await deletionService.deleteUserAccount();
+
+      if (success) {
+        // Navigate to login or welcome screen
+        Navigator.of(context).pushReplacementNamed('/login');
+        
+        // Optionally show a success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Account deleted successfully'))
+        );
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete account. Please try again.'),
+            backgroundColor: Colors.red,
+          )
+        );
+      }
+    }
+  },
+  child: Center(
+    child: Text(
+      'Delete account',
+      style: TextStyle(
+        color: Color(0xffffffff),
+        fontFamily: fontFamily,
+        fontSize: size.width * 0.045,
+        fontWeight: FontWeight.w500
+      ),
+    ),
+  )
+),
                   SizedBox(height: size.height * 0.03),
                 ],
               ),

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class BlockCalls extends StatefulWidget {
   const BlockCalls({super.key});
@@ -11,6 +14,65 @@ class _BlockCallsState extends State<BlockCalls> {
   final String fontFamily = 'Roboto';
   final TextEditingController search = TextEditingController();
   String searchQuery = '';
+  List<Map<String, dynamic>> blockedContacts = [];
+  List<Map<String, dynamic>> filteredContacts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBlockedContacts();
+  }
+
+  Future<void> _fetchBlockedContacts() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('blocked_contacts')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      setState(() {
+        blockedContacts = querySnapshot.docs.map((doc) => {
+          'id': doc.id,
+          ...doc.data()
+        }).toList();
+        filteredContacts = List.from(blockedContacts);
+      });
+    } catch (e) {
+      print('Error fetching blocked contacts: $e');
+    }
+  }
+
+  Future<void> _unblockContact(String contactId, String number, String name) async {
+    try {
+      // Attempt to unblock via device settings
+      final unblockUri = Uri.parse('tel:unblock:$number');
+      if (await canLaunchUrl(unblockUri)) {
+        await launchUrl(unblockUri);
+      }
+
+      // Remove from Firestore
+      await FirebaseFirestore.instance
+          .collection('blocked_contacts')
+          .doc(contactId)
+          .delete();
+
+      // Refresh the list
+      await _fetchBlockedContacts();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name unblocked')),
+      );
+    } catch (error) {
+      print('Error unblocking contact: $error');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to unblock contact')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,19 +89,25 @@ class _BlockCallsState extends State<BlockCalls> {
         automaticallyImplyLeading: false,
         toolbarHeight: size.height * 0.1,
         backgroundColor: Color(0xff66C7F4),
-        leading: Container(
-          margin: EdgeInsets.only(left: 10),
-          height: size.height * 0.04,
-          width: size.height * 0.04,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Color(0xffDFF6FF),
-          ),
-          child: Center(
-            child: Icon(
-              Icons.arrow_back,
-              color: Colors.black,
-              size: size.height * 0.03,
+        leading: InkWell(
+          onTap: () {
+            Navigator.pop(context);
+          },
+          child: Container(
+            
+            margin: EdgeInsets.only(left: 10),
+            height: size.height * 0.04,
+            width: size.height * 0.04,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xffDFF6FF),
+            ),
+            child: Center(
+              child: Icon(
+                Icons.arrow_back,
+                color: Colors.black,
+                size: size.height * 0.03,
+              ),
             ),
           ),
         ),
@@ -101,18 +169,28 @@ class _BlockCallsState extends State<BlockCalls> {
                 onChanged: (value) {
                   setState(() {
                     searchQuery = value.toLowerCase();
+                    filteredContacts = blockedContacts.where((contact) => 
+                      contact['number'].contains(searchQuery)
+                    ).toList();
                   });
                 },
               ),
               SizedBox(height: size.height * 0.025),
               Expanded(
                 child: ListView.builder(
-                  itemCount: 1, // Replace with actual data length
+                  itemCount: filteredContacts.length,
                   itemBuilder: (context, index) {
+                    final contact = filteredContacts[index];
                     return BlockedNumberItem(
                       size: size,
                       fontSize: fontSize,
                       fontFamily: fontFamily,
+                      number: contact['number'],
+                      onUnblock: () => _unblockContact(
+                        contact['id'], 
+                        contact['number'], 
+                        contact['name'] ?? 'Unknown'
+                      ),
                     );
                   },
                 ),
@@ -129,12 +207,16 @@ class BlockedNumberItem extends StatelessWidget {
   final Size size;
   final double fontSize;
   final String fontFamily;
+  final String number;
+  final VoidCallback onUnblock;
 
   const BlockedNumberItem({
     super.key,
     required this.size,
     required this.fontSize,
     required this.fontFamily,
+    required this.number,
+    required this.onUnblock,
   });
 
   @override
@@ -159,7 +241,7 @@ class BlockedNumberItem extends StatelessWidget {
           SizedBox(width: size.width * 0.03),
           Expanded(
             child: Text(
-              '03178251928',
+              number,
               style: TextStyle(
                 fontFamily: fontFamily,
                 color: const Color(0xff393939),
@@ -169,7 +251,7 @@ class BlockedNumberItem extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () {},
+            onPressed: onUnblock,
             child: Text(
               'Unblock',
               style: TextStyle(

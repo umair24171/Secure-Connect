@@ -1,7 +1,10 @@
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/models/caller_info.dart';
+import 'dart:developer' as developer;
 
 // screens/alert_screen.dart
 class AlertScreen extends StatelessWidget {
@@ -18,6 +21,42 @@ class AlertScreen extends StatelessWidget {
     required this.callerInfo,
     required this.isLoading,
   });
+
+   Future<void> _proceedWithCall(BuildContext context) async {
+    try {
+      // Save caller info to Firebase
+      await FirebaseFirestore.instance.collection('proceed-calls').add({
+        'phoneNumber': phoneNumber,
+        'callerName': callerInfo?.name ?? 'Unknown',
+        'callType': callType.toString(),
+        'timestamp': FieldValue.serverTimestamp(),
+        'provider': callerInfo?.provider,
+        'country': callerInfo?.country,
+        'isSpam': callerInfo?.isSpam ?? false,
+        'spamCount': callerInfo?.spamCount ?? 0,
+      });
+
+      // Close overlay
+      await FlutterOverlayWindow.closeOverlay();
+
+      // Close screen
+      Navigator.pop(context);
+    } catch (e) {
+      developer.log('Error proceeding with call: $e');
+    }
+  }
+
+  Future<void> _cancelCall(BuildContext context) async {
+    try {
+      // Close overlay
+      await FlutterOverlayWindow.closeOverlay();
+
+      // Close screen
+      Navigator.pop(context);
+    } catch (e) {
+      developer.log('Error canceling call: $e');
+    }
+  }
 
   //   final String fontFamily = 'Roboto';
   @override
@@ -130,20 +169,7 @@ class AlertScreen extends StatelessWidget {
                                     Size(size.width * 0.18, size.width * 0.18),
                                 padding: EdgeInsets.zero,
                               ),
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => Dialog(
-                                    elevation: 0,
-                                    child: ProceedDialog(
-                                      context: context,
-                                      size: size,
-                                      fontFamily: fontFamily,
-                                      phoneNumber: phoneNumber,
-                                    ),
-                                  ),
-                                );
-                              },
+                              onPressed: () => _proceedWithCall(context),
                               child: SizedBox.expand(
                                 child: Center(
                                   child: Text(
@@ -166,9 +192,7 @@ class AlertScreen extends StatelessWidget {
                                     Size(size.width * 0.18, size.width * 0.18),
                                 padding: EdgeInsets.zero,
                               ),
-                              onPressed: () {
-                                Navigator.pop(context);
-                              },
+                              onPressed: () => _cancelCall(context),
                               child: SizedBox.expand(
                                 child: Center(
                                   child: Text(

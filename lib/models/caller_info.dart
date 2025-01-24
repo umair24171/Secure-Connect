@@ -34,9 +34,11 @@ class SpamCall extends CallerInfo {
   final String phoneNumber;
   final DateTime timestamp;
   final String callType; // incoming or outgoing
+  final String? userId;
 
   SpamCall({
     this.id,
+ this.userId,
     required this.phoneNumber,
     required this.timestamp,
     required this.callType,
@@ -67,6 +69,7 @@ class SpamCall extends CallerInfo {
       provider: map['provider'],
       country: map['country'],
       numberType: map['numberType'],
+      // userId: map['userId']
     );
   }
 
@@ -82,6 +85,7 @@ class SpamCall extends CallerInfo {
       'provider': provider,
       'country': country,
       'numberType': numberType,
+      'userId':userId
     };
   }
 }

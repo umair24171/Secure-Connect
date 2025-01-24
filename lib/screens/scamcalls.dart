@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:secureconnect/controllers/spam_call_service.dart';
-import 'package:secureconnect/models/caller_info.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../controllers/spam_call_service.dart';
+import '../models/caller_info.dart';
 
 class Scamcalls extends StatefulWidget {
   const Scamcalls({super.key});
@@ -11,7 +12,7 @@ class Scamcalls extends StatefulWidget {
 }
 
 class _ScamcallsState extends State<Scamcalls> {
- final String fontFamily = 'Roboto';
+  final String fontFamily = 'Roboto';
   final TextEditingController search = TextEditingController();
   final ScamCallsService _scamCallsService = ScamCallsService();
   String searchQuery = '';
@@ -25,7 +26,7 @@ class _ScamcallsState extends State<Scamcalls> {
   }
 
   Future<void> _initializeService() async {
-    await _scamCallsService.initialize();
+    // await _scamCallsService.initialize();
     _loadSpamCalls();
   }
 
@@ -38,14 +39,40 @@ class _ScamcallsState extends State<Scamcalls> {
     });
   }
 
+  Future<void> _handleReport(SpamCall spamCall) async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Spam'),
+        content: const Text('Do you want to report this number as spam?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Report'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _scamCallsService.reportSpamCall(spamCall);
+      _loadSpamCalls();
+    }
+  }
+
+  Future<void> _handleIgnore(SpamCall spamCall) async {
+    await _scamCallsService.deleteSpamCall(spamCall.phoneNumber);
+    _loadSpamCalls();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Get screen dimensions
     final size = MediaQuery.of(context).size;
-
-    // Calculate responsive values
     final double paddingScale = size.width * 0.04;
-    final double iconSize = size.width * 0.06;
     final double fontSize = size.width * 0.04;
     final double smallFontSize = size.width * 0.035;
 
@@ -53,22 +80,20 @@ class _ScamcallsState extends State<Scamcalls> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         toolbarHeight: size.height * 0.1,
-        backgroundColor: Color(0xff66C7F4),
-        leading: Container(
-          margin: EdgeInsets.only(left: 10),
-          height: size.height * 0.04,
-          width: size.height * 0.04,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Color(0xffDFF6FF),
-          ),
-          child: Center(
+        backgroundColor: const Color(0xff66C7F4),
+        leading: IconButton(
+          icon: Container(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xffDFF6FF),
+            ),
             child: Icon(
               Icons.arrow_back,
               color: Colors.black,
               size: size.height * 0.03,
             ),
           ),
+          onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
         title: Text(
@@ -99,15 +124,15 @@ class _ScamcallsState extends State<Scamcalls> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SearchBar(
-                textStyle: MaterialStatePropertyAll(
-                  TextStyle(
-                    color: const Color(0xff494949),
-                    fontFamily: fontFamily,
-                    fontSize: fontSize,
-                  ),
-                ),
+                controller: search,
+                onChanged: (value) {
+                  setState(() {
+                    searchQuery = value.toLowerCase();
+                    _loadSpamCalls();
+                  });
+                },
                 hintText: 'Search numbers',
-                hintStyle: MaterialStatePropertyAll(
+                textStyle: MaterialStatePropertyAll(
                   TextStyle(
                     color: const Color(0xff494949),
                     fontFamily: fontFamily,
@@ -119,18 +144,7 @@ class _ScamcallsState extends State<Scamcalls> {
                     borderRadius: BorderRadius.all(Radius.circular(30)),
                   ),
                 ),
-                surfaceTintColor:
-                    const MaterialStatePropertyAll(Color(0xffDFF6FF)),
-                shadowColor: const MaterialStatePropertyAll(Color(0xffDFF6FF)),
-                backgroundColor:
-                    const MaterialStatePropertyAll(Color(0xffDFF6FF)),
-                elevation: const MaterialStatePropertyAll(2),
-                controller: search,
-                onChanged: (value) {
-                  setState(() {
-                    searchQuery = value.toLowerCase();
-                  });
-                },
+                backgroundColor: const MaterialStatePropertyAll(Color(0xffDFF6FF)),
               ),
               SizedBox(height: size.height * 0.02),
               Text(
@@ -139,76 +153,33 @@ class _ScamcallsState extends State<Scamcalls> {
                   fontFamily: fontFamily,
                   fontSize: fontSize,
                   fontWeight: FontWeight.w500,
-                  color: Colors.black,
                 ),
               ),
               SizedBox(height: size.height * 0.015),
-               Expanded(
+              Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        itemCount: spamCalls.length,
-                        itemBuilder: (context, index) {
-                          final call = spamCalls[index];
-                          return Padding(
-                            padding: EdgeInsets.only(bottom: size.height * 0.01),
-                            child: ScamCallContainer(
-  size: size,
-  fontSize: fontSize,
-  smallFontSize: smallFontSize,
-  fontFamily: fontFamily,
-  spamCall: call,
-  onIgnore: () async {
-    // Handle ignore action
-    await _scamCallsService.deleteSpamCall(call.id!);
-    _loadSpamCalls();
-  },
-  onReport: () async {
-    // Handle report action
-    // You might want to show a confirmation dialog here
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Report Spam'),
-        content: Text('Do you want to report this number as spam?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              // Report the number
-              Navigator.pop(context);
-            },
-            child: Text('Report'),
-          ),
-        ],
-      ),
-    );
-  },
-),
-                          );
-                        },
-                      ),
+                    : spamCalls.isEmpty
+                        ? const Center(child: Text('No spam calls found'))
+                        : ListView.builder(
+                            itemCount: spamCalls.length,
+                            itemBuilder: (context, index) {
+                              final call = spamCalls[index];
+                              return Padding(
+                                padding: EdgeInsets.only(bottom: size.height * 0.01),
+                                child: ScamCallContainer(
+                                  size: size,
+                                  fontSize: fontSize,
+                                  smallFontSize: smallFontSize,
+                                  fontFamily: fontFamily,
+                                  spamCall: call,
+                                  onIgnore: () => _handleIgnore(call),
+                                  onReport: () => _handleReport(call),
+                                ),
+                              );
+                            },
+                          ),
               ),
-              // Expanded(
-              //   child: ListView.builder(
-              //     itemCount: 3, // Replace with actual data length
-              //     itemBuilder: (context, index) {
-              //       return Padding(
-              //         padding: EdgeInsets.only(bottom: size.height * 0.01),
-              //         child: ScamCallContainer(
-              //           size: size,
-              //           fontSize: fontSize,
-              //           smallFontSize: smallFontSize,
-              //           fontFamily: fontFamily,
-              //         ),
-              //       );
-              //     },
-              //   ),
-              // ),
-            
             ],
           ),
         ),
@@ -216,7 +187,6 @@ class _ScamcallsState extends State<Scamcalls> {
     );
   }
 }
-
 
 class ScamCallContainer extends StatelessWidget {
   final Size size;

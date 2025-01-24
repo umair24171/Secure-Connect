@@ -1,7 +1,15 @@
+import 'dart:developer';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:direct_call_plus/direct_call_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:contacts_service/contacts_service.dart';
+
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;
+
+import 'package:url_launcher/url_launcher.dart';
 
 class Calls extends StatefulWidget {
   const Calls({super.key});
@@ -462,11 +470,75 @@ class CallListItem extends StatelessWidget {
             ],
           ),
         ),
-        Icon(
-          Icons.call,
-          size: fontSize * 1.2,
-          color: const Color(0xff444444),
+        InkWell(
+          onTap: () async{
+             bool? res = await DirectCallPlus.makeCall(number);
+             if(res?? false){
+              log('call $res');
+             }
+          },
+          child: Icon(
+            Icons.call,
+            size: fontSize * 1.2,
+            color: const Color(0xff444444), 
+          ),
         ),
+        const SizedBox(width: 5,),
+       
+  IconButton(
+ onPressed: () async {
+   // Check if number exists in blocked contacts
+   final existingBlockQuery = await FirebaseFirestore.instance
+       .collection('blocked_contacts')
+       .doc(number)
+       .get();
+
+   if (existingBlockQuery.exists) {
+     // Redirect to phone's unblock settings
+     final Uri unblockUri = Uri.parse('tel:unblock:$number');
+     if (await canLaunchUrl(unblockUri)) {
+       await launchUrl(unblockUri);
+       
+       // Remove from Firebase block list
+       await existingBlockQuery.reference.delete();
+
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(content: Text('$name unblocked'))
+       );
+     } else {
+       ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text('Unable to open unblocking interface'))
+       );
+     }
+   } else {
+     // Block flow (similar to previous implementation)
+     final Uri blockUri = Uri.parse('tel:block:$number');
+     if (await canLaunchUrl(blockUri)) {
+       await launchUrl(blockUri);
+       
+       await FirebaseFirestore.instance.collection('blocked_contacts').doc(number).set({
+         'name': name,
+         'number': number,
+         'blockedAt': FieldValue.serverTimestamp(),
+         'userId':FirebaseAuth.instance.currentUser?.uid??''
+       });
+
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(content: Text('$name blocked'))
+       );
+     } else {
+       ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text('Unable to open blocking interface'))
+       );
+     }
+   }
+ }, 
+ icon: Icon(
+   Icons.block, 
+   size: fontSize * 1.2,
+   color: const Color(0xff444444),
+ )
+)
       ],
     );
   }

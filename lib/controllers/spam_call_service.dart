@@ -1,42 +1,57 @@
-import 'package:path/path.dart';
-import 'package:secureconnect/models/caller_info.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import '../models/caller_info.dart';
 
 class ScamCallsService {
-  late Database database;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> initialize() async {
-    database = await openDatabase(
-      join(await getDatabasesPath(), 'spam_calls.db'),
-      version: 1,
-    );
+    // Any initialization if needed
   }
 
-  Future<List<SpamCall>> getSpamCalls({String? searchQuery}) async {
-    final List<Map<String, dynamic>> maps;
-    
-    if (searchQuery != null && searchQuery.isNotEmpty) {
-      maps = await database.query(
-        'spam_calls',
-        where: 'phoneNumber LIKE ? OR callerName LIKE ?',
-        whereArgs: ['%$searchQuery%', '%$searchQuery%'],
-        orderBy: 'timestamp DESC',
-      );
-    } else {
-      maps = await database.query(
-        'spam_calls',
-        orderBy: 'timestamp DESC',
-      );
+  Future<List<SpamCall>> getSpamCalls({String searchQuery = ''}) async {
+    try {
+      Query query = _firestore.collection('spam_calls');
+
+      // Apply search filter if searchQuery is not empty
+      if (searchQuery.isNotEmpty) {
+        query = query.where('phoneNumber', isGreaterThanOrEqualTo: searchQuery)
+                    .where('phoneNumber', isLessThanOrEqualTo: searchQuery + '\uf8ff');
+      }
+
+      // Order by timestamp, most recent first
+      query = query.orderBy('timestamp', descending: true);
+
+      final querySnapshot = await query.get();
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id; // Add Firestore document ID
+        return SpamCall.fromMap(data);
+      }).toList();
+    } catch (e) {
+      debugPrint('Error fetching spam calls: $e');
+      return [];
     }
-
-    return List.generate(maps.length, (i) => SpamCall.fromMap(maps[i]));
   }
 
-  Future<void> deleteSpamCall(int id) async {
-    await database.delete(
-      'spam_calls',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  Future<void> deleteSpamCall(String id) async {
+    try {
+      await _firestore.collection('spam_calls').doc(id).delete();
+    } catch (e) {
+      debugPrint('Error deleting spam call: $e');
+    }
+  }
+
+  Future<void> reportSpamCall(SpamCall spamCall) async {
+    try {
+      // Increment spam count or add additional reporting logic
+      await _firestore.collection('spam_calls').doc(spamCall.phoneNumber).update({
+        'spamCount': FieldValue.increment(1),
+        // Add any additional reporting metadata
+      });
+    } catch (e) {
+      debugPrint('Error reporting spam call: $e');
+    }
   }
 }

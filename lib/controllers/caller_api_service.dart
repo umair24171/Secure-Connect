@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:math' as math;
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -64,7 +66,14 @@ class CallerApiService {
         
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          return CallerInfo.fromJson(data);
+        CallerInfo info = CallerInfo.fromJson(data);
+
+        // If the call is detected as spam, add to Firebase
+        if (info.isSpam) {
+          await addSpamCallToFirebase(info, phoneNumber, 'incoming');
+        }
+
+        return info;
         } else {
           log('API error: ${response.statusCode} - ${response.body}');
           if (response.statusCode == 429) { // Too Many Requests
@@ -92,10 +101,41 @@ class CallerApiService {
         rethrow;
       }
     }
+
     
     log('All retry attempts failed');
     return null;
   }
+
+  Future<void> addSpamCallToFirebase(CallerInfo callerInfo, String phoneNumber, String callType) async {
+  if (!callerInfo.isSpam) return;
+
+  try {
+    // Get Firestore instance
+    final firestore = FirebaseFirestore.instance;
+
+    // Create a SpamCall object
+    final spamCall = SpamCall(
+      phoneNumber: phoneNumber,
+      timestamp: DateTime.now(),
+      callType: callType,
+      name: callerInfo.name,
+      isSpam: true,
+      spamCount: callerInfo.spamCount,
+      provider: callerInfo.provider,
+      country: callerInfo.country,
+      numberType: callerInfo.numberType,
+      userId: FirebaseAuth.instance.currentUser?.uid??''
+    );
+
+    // Add to Firestore collection
+    await firestore.collection('spam_calls').doc(phoneNumber).set(spamCall.toMap());
+
+    log('Spam call added to Firebase: $phoneNumber');
+  } catch (e, stackTrace) {
+    log('Error adding spam call to Firebase', error: e, stackTrace: stackTrace);
+  }
+}
 
   String _formatToE164(String phoneNumber) {
     String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
