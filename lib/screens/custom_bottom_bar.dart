@@ -22,7 +22,7 @@ class _CustomBottomBarState extends State<CustomBottomBar> {
     const Home(),
     const Calls(),
    const StatisticsScreen(),
-    Settings(),
+    SettingsScreen(),
   ];
 
   @override

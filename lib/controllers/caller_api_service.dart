@@ -11,7 +11,7 @@ import '../models/caller_info.dart';
 
 class CallerApiService {
   static const String baseUrl = 'https://callerapi.com/api/phone/info/';
-  static const String apiKey = 'a7847ca5-313c-4a2e-b805-3e2de3166e97';
+  static const String apiKey = '23e2f8c9-8dab-42db-8bd9-a278991b2030';
   static const int maxRetries = 3;
   final _client = http.Client();
 

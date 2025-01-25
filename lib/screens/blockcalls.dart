@@ -29,7 +29,7 @@ class _BlockCallsState extends State<BlockCalls> {
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
-          .collection('blocked_contacts')
+          .collection('blockedContacts')
           .where('userId', isEqualTo: user.uid)
           .get();
 
@@ -55,7 +55,7 @@ class _BlockCallsState extends State<BlockCalls> {
 
       // Remove from Firestore
       await FirebaseFirestore.instance
-          .collection('blocked_contacts')
+          .collection('blockedContacts')
           .doc(contactId)
           .delete();
 

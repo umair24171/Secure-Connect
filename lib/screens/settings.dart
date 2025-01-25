@@ -8,8 +8,8 @@ import 'package:secureconnect/screens/help_support.dart';
 import 'package:secureconnect/screens/scamcalls.dart';
 import 'package:share_plus/share_plus.dart';
 
-class Settings extends StatelessWidget {
-  Settings({super.key});
+class SettingsScreen extends StatelessWidget {
+  SettingsScreen({super.key});
   final String fontFamily = 'Roboto';
 
   @override
@@ -59,8 +59,8 @@ class Settings extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: paddingScale,
-                vertical: paddingScale * 0.75,
-              ),
+                // vertical: paddingScale * 0.75,
+              ).copyWith(top:paddingScale * 0.75 ),
               child: Column(
                 children: [
                   Expanded(
@@ -127,6 +127,7 @@ class Settings extends StatelessWidget {
                       ],
                     ),
                   ),
+                  SizedBox(height: 0,),
                
                  ElevatedButton(
   style: ElevatedButton.styleFrom(
@@ -193,7 +194,8 @@ class Settings extends StatelessWidget {
     ),
   )
 ),
-                  SizedBox(height: size.height * 0.03),
+                 
+                  // SizedBox(height: size.height * 0.03),
                 ],
               ),
             )));

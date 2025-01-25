@@ -1,9 +1,12 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:contacts_service/contacts_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
+import 'package:secureconnect/firebase_options.dart';
 import 'package:secureconnect/models/caller_info.dart';
 import 'dart:developer' as developer;
 
@@ -15,18 +18,22 @@ class AlertScreen extends StatelessWidget {
   final CallScreenType callType;
   final CallerInfo? callerInfo;
   final bool isLoading;
-  final String fontFamily = 'Roboto';
+ final String? contactName;
 
   const AlertScreen({
     super.key,
     required this.phoneNumber,
     required this.callType,
     required this.callerInfo,
+    this.contactName,
     required this.isLoading,
   });
 
+  final String fontFamily = 'Roboto';
+
    Future<void> _proceedWithCall(BuildContext context) async {
     try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
       // Save caller info to Firebase
       await FirebaseFirestore.instance.collection('proceed-calls').add({
         'userId':FirebaseAuth.instance.currentUser?.uid ?? '',
@@ -41,10 +48,10 @@ class AlertScreen extends StatelessWidget {
       });
 
       // Close overlay
-      await FlutterOverlayWindow.closeOverlay();
+       await  CallService().hideOverlay();
 
       // Close screen
-      Navigator.pop(context);
+      // Navigator.pop(context);
     } catch (e) {
       developer.log('Error proceeding with call: $e');
     }
@@ -53,10 +60,10 @@ class AlertScreen extends StatelessWidget {
   Future<void> _cancelCall(BuildContext context) async {
     try {
       // Close overlay
-      await FlutterOverlayWindow.closeOverlay();
+   await  CallService().hideOverlay();
 
       // Close screen
-      Navigator.pop(context);
+      // Navigator.pop(context);
     } catch (e) {
       developer.log('Error canceling call: $e');
     }
@@ -66,7 +73,9 @@ class AlertScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
+ final displayName = contactName??
+                        callerInfo?.name ?? 
+                        'Unknown Number';
     return WillPopScope(
       onWillPop: () async => false, // Prevent back button
       child: Scaffold(
@@ -101,7 +110,7 @@ class AlertScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              callerInfo?.name ?? 'Unknown Number',
+                             displayName,
                               style: TextStyle(
                                 color: Colors.white,
                                 fontFamily: fontFamily,
@@ -254,6 +263,7 @@ class _ProceedDialogState extends State<ProceedDialog> {
     }
 
     try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
       await FirebaseFirestore.instance.collection('proceed-calls').add({
         'phoneNumber': widget.phoneNumber,
         'didProceed': didProceed,

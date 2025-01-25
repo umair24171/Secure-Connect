@@ -1,7 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/controllers/userprovider.dart';
 import 'package:secureconnect/firebase_options.dart';
 import 'package:secureconnect/screens/overlay_widget.dart';

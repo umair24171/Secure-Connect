@@ -489,7 +489,7 @@ class CallListItem extends StatelessWidget {
  onPressed: () async {
    // Check if number exists in blocked contacts
    final existingBlockQuery = await FirebaseFirestore.instance
-       .collection('blocked_contacts')
+       .collection('blockedContacts')
        .doc(number)
        .get();
 
@@ -516,7 +516,7 @@ class CallListItem extends StatelessWidget {
      if (await canLaunchUrl(blockUri)) {
        await launchUrl(blockUri);
        
-       await FirebaseFirestore.instance.collection('blocked_contacts').doc(number).set({
+       await FirebaseFirestore.instance.collection('blockedContacts').doc(number).set({
          'name': name,
          'number': number,
          'blockedAt': FieldValue.serverTimestamp(),

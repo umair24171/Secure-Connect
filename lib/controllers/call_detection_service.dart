@@ -52,7 +52,7 @@ void onServiceStart(ServiceInstance service) async {
             
           case PhoneStateStatus.CALL_ENDED:
             log('Call ended');
-            await callService._hideOverlay();
+            await callService.hideOverlay();
             break;
             
           default:
@@ -207,10 +207,11 @@ class CallService {
     }
   }
 
-   Future<void> _hideOverlay() async {
+   Future<void> hideOverlay() async {
     try {
       if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.closeOverlay();
+        
         
         // Show dialog using global navigator key
         _showProceedDialog();

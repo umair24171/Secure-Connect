@@ -49,7 +49,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
       // Blocked Calls
       final blockedCallSnapshot = await firestore
-          .collection('blocked_contacts')
+          .collection('blockedContacts')
           .where('userId', isEqualTo: userId)
           .get();
 
@@ -175,7 +175,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SettingsContainer(null, '(17) Total scam calls detected', null, false),
+                      SettingsContainer(null, '(0) Total scam calls detected', null, false),
 
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10,horizontal: 10),
@@ -257,9 +257,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               chartRadius: 80,
               colorList:  const [
             // if(isProceed) 
+             Color(0xffD20D0D),
                Color(0xff058B1E),
           //  if(!isProceed) 
-               Color(0xffD20D0D),
+              
               ],
               initialAngleInDegree: 0,
               chartType: ChartType.ring,

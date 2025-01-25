@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:secureconnect/screens/call_logs_screen.dart';
@@ -157,7 +159,7 @@ void initState() {
                             Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (context) => Settings()));
+                                    builder: (context) => SettingsScreen()));
                           },
                           child: ActionButton(
                             icon: Icons.settings_outlined,
@@ -198,103 +200,115 @@ class ScamDetection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(size.width * 0.03),
-      decoration: BoxDecoration(
-        color: const Color(0xffF5E2E2),
-        borderRadius: BorderRadius.circular(17),
-      ),
-      child: Column(
-        children: [
-          Row(
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+        .collection('spam_calls')
+        .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+        .where('timestamp', isGreaterThan: DateTime.now().subtract(Duration(hours: 24)))
+        .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return SizedBox.shrink();
+        }
+
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(size.width * 0.03),
+          decoration: BoxDecoration(
+            color: const Color(0xffF5E2E2),
+            borderRadius: BorderRadius.circular(17),
+          ),
+          child: Column(
             children: [
-              Container(
-                padding: EdgeInsets.all(size.width * 0.03),
-                decoration: const BoxDecoration(
-                  color: Color(0xff8F0000),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.cancel_outlined,
-                    color: Colors.white,
-                    size: 20,
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(size.width * 0.03),
+                    decoration: const BoxDecoration(
+                      color: Color(0xff8F0000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
                   ),
-                ),
+                  SizedBox(width: size.width * 0.02),
+                  Text(
+                    'Scam Detection',
+                    style: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontWeight: FontWeight.w700,
+                      fontSize: size.width * 0.04,
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(width: size.width * 0.02),
+              SizedBox(height: size.height * 0.02),
               Text(
-                'Scam Detection',
+                'Likely scam',
                 style: TextStyle(
                   fontFamily: 'Roboto',
-                  fontWeight: FontWeight.w700,
-                  fontSize: size.width * 0.04,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: size.height * 0.02),
-          Text(
-            'Likely scam',
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontWeight: FontWeight.w500,
-              fontSize: size.width * 0.04,
-            ),
-          ),
-          SizedBox(height: size.height * 0.03),
-          Text(
-            'Suspicious activity detected for this call.',
-            style: TextStyle(
-              fontFamily: 'Roboto',
-              fontWeight: FontWeight.w400,
-              fontSize: size.width * 0.035,
-            ),
-          ),
-          SizedBox(height: size.height * 0.02),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Text(
-                'Not a scam',
-                style: TextStyle(
-                  color: const Color(0xffCA0C0C),
-                  fontFamily: 'Roboto',
-                  fontSize: size.width * 0.04,
                   fontWeight: FontWeight.w500,
+                  fontSize: size.width * 0.04,
                 ),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff8F0000),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: size.width * 0.03,
-                    vertical: size.height * 0.01,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(23),
-                  ),
+              SizedBox(height: size.height * 0.03),
+              Text(
+                'Suspicious activity detected for this call.',
+                style: TextStyle(
+                  fontFamily: 'Roboto',
+                  fontWeight: FontWeight.w400,
+                  fontSize: size.width * 0.035,
                 ),
-                onPressed: () {},
-                child: Text(
-                  'Scam call',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Roboto',
-                    fontSize: size.width * 0.04,
-                    fontWeight: FontWeight.w500,
+              ),
+              SizedBox(height: size.height * 0.02),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Text(
+                    'Not a scam',
+                    style: TextStyle(
+                      color: const Color(0xffCA0C0C),
+                      fontFamily: 'Roboto',
+                      fontSize: size.width * 0.04,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff8F0000),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: size.width * 0.03,
+                        vertical: size.height * 0.01,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(23),
+                      ),
+                    ),
+                    onPressed: () {},
+                    child: Text(
+                      'Scam call',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Roboto',
+                        fontSize: size.width * 0.04,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
-
 class CallButton extends StatelessWidget {
   final String image;
   final String text;
