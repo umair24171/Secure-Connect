@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 
 class HelpAndSupportScreen extends StatefulWidget {
   const HelpAndSupportScreen({super.key});
@@ -31,7 +32,9 @@ class _HelpAndSupportScreenState extends State<HelpAndSupportScreen> {
     }
 
     try {
-      await FirebaseFirestore.instance.collection('support_tickets').add({
+      String id=Uuid().v4();
+      await FirebaseFirestore.instance.collection('support_tickets').doc(id).set({
+        'ticketId':id,
         'userId': user.uid,
         'email': user.email,
         'subject': _subjectController.text,

@@ -53,6 +53,7 @@ final bool? status = await FlutterOverlayWindow.requestPermission();
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: _screens[_selectedIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),

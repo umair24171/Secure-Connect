@@ -4,10 +4,14 @@ import 'dart:developer';
 import 'dart:developer' as developer;
 // import 'package:dash_bubble/dash_bubble.dart';
 // import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:secureconnect/main.dart';
+import 'package:secureconnect/screens/alert.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // service_handler.dart
 @pragma('vm:entry-point')
@@ -73,11 +77,13 @@ Future<void> initializeCallService() async {
   await CallService().initialize();
 }
 
+
 // call_service.dart
 class CallService {
   static final CallService _instance = CallService._internal();
   factory CallService() => _instance;
   CallService._internal();
+ final String _kLastCallNumberKey = 'last_call_phone_number';
 
   Future<void> initialize() async {
     try {
@@ -136,11 +142,14 @@ class CallService {
         visibility: NotificationVisibility.visibilityPublic,
         positionGravity: PositionGravity.auto,
         width: WindowSize.matchParent,
-        height: 771,
+        height: 700,
       );
 
       developer.log('Overlay created successfully', name: 'call_service');
+       final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLastCallNumberKey, phoneNumber);
       await _updateOverlayData(phoneNumber, callType);
+
 
     } catch (e, stack) {
       developer.log(
@@ -198,13 +207,46 @@ class CallService {
     }
   }
 
-  Future<void> _hideOverlay() async {
+   Future<void> _hideOverlay() async {
     try {
       if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.closeOverlay();
+        
+        // Show dialog using global navigator key
+        _showProceedDialog();
       }
     } catch (e) {
       log('Error hiding overlay: $e');
+    }
+  }
+   Future<String?> _getLastCallPhoneNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kLastCallNumberKey);
+  }
+  Future<void> clearLastCallNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kLastCallNumberKey);
+  }
+
+    void _showProceedDialog() async {
+    final BuildContext? context = navigatorKey.currentContext;
+    final String? lastPhoneNumber = await _getLastCallPhoneNumber();
+    
+    if (context != null && lastPhoneNumber != null) {
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            child: ProceedDialog(
+              context: dialogContext,
+              size: MediaQuery.of(context).size,
+              fontFamily: 'Roboto',
+              phoneNumber: lastPhoneNumber,
+            ),
+          );
+        },
+      );
     }
   }
 }

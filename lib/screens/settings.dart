@@ -99,11 +99,7 @@ class Settings extends StatelessWidget {
                               'Scam Calls', '', false),
                         ),
                         SizedBox(height: size.height * 0.015),
-                        SettingsContainer(
-                            Icons.notifications_none,
-                            'Notifications',
-                            '',
-                            true), // Added switch parameter
+                       NotificationsSettingsContainer(),
                         SizedBox(height: size.height * 0.015),
                         SettingsContainer(Icons.privacy_tip_outlined,
                             'Privacy & Policy', '', false),
@@ -131,6 +127,7 @@ class Settings extends StatelessWidget {
                       ],
                     ),
                   ),
+               
                  ElevatedButton(
   style: ElevatedButton.styleFrom(
     backgroundColor: Colors.red,
@@ -202,59 +199,164 @@ class Settings extends StatelessWidget {
             )));
   }
 
-  Widget SettingsContainer(
-      IconData? icon, String text, String? image, bool hasSwitch) {
-    return Builder(builder: (context) {
-      final size = MediaQuery.of(context).size;
+ Widget SettingsContainer(
+  IconData? icon, 
+  String text, 
+  String? image, 
+  bool hasSwitch, 
+  {bool? switchValue, 
+  ValueChanged<bool>? onSwitchChanged}
+) {
+  return Builder(builder: (context) {
+    final size = MediaQuery.of(context).size;
 
-      return Container(
-        decoration: BoxDecoration(
-            color: Color(0xffDFF6FF), borderRadius: BorderRadius.circular(13)),
-        padding: EdgeInsets.symmetric(
-          vertical: size.height * 0.02,
-          horizontal: size.width * 0.04,
-        ),
-        child: Row(
-          mainAxisAlignment:
-              MainAxisAlignment.spaceBetween, // Changed to spaceBetween
-          children: [
-            Row(
-              children: [
-                if (icon != null)
-                  Icon(
-                    icon,
-                    color: Color(0xff1FAAEA),
-                    size: size.width * 0.06,
-                  )
-                else if (image != null)
-                  Image.asset(
-                    image,
-                    width: size.width * 0.06,
-                    height: size.width * 0.06,
-                  ),
-                SizedBox(width: size.width * 0.03),
-                Text(
-                  text,
-                  style: TextStyle(
-                      color: Colors.black,
-                      fontFamily: fontFamily,
-                      fontSize: size.width * 0.045,
-                      fontWeight: FontWeight.w500),
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xffDFF6FF), 
+        borderRadius: BorderRadius.circular(13)
+      ),
+      padding: EdgeInsets.symmetric(
+        vertical: size.height * 0.02,
+        horizontal: size.width * 0.04,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              if (icon != null)
+                Icon(
+                  icon,
+                  color: Color(0xff1FAAEA),
+                  size: size.width * 0.06,
+                )
+              else if (image != null)
+                Image.asset(
+                  image,
+                  width: size.width * 0.06,
+                  height: size.width * 0.06,
                 ),
-              ],
-            ),
-            if (hasSwitch)
-              Switch(
-                value: true, // You might want to make this controllable
-                onChanged: (value) {},
-                activeColor: Color(0xff1FAAEA), // Blue background
-                activeTrackColor: Color(0xff1FAAEA).withOpacity(0.5),
-                thumbColor:
-                    MaterialStateProperty.all(Colors.white), // White thumb
+              SizedBox(width: size.width * 0.03),
+              Text(
+                text,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontFamily: 'Roboto', // Replace with your font
+                  fontSize: size.width * 0.045,
+                  fontWeight: FontWeight.w500
+                ),
               ),
-          ],
-        ),
-      );
-    });
+            ],
+          ),
+          if (hasSwitch)
+            Switch(
+              value: switchValue ?? false, 
+              onChanged: onSwitchChanged,
+              activeColor: Color(0xff1FAAEA),
+              activeTrackColor: Color(0xff1FAAEA).withOpacity(0.5),
+              thumbColor: MaterialStateProperty.all(Colors.white),
+            ),
+        ],
+      ),
+    );
+  });
+}
+
+
+}
+
+
+class NotificationsSettingsContainer extends StatefulWidget {
+  @override
+  _NotificationsSettingsContainerState createState() => _NotificationsSettingsContainerState();
+}
+
+class _NotificationsSettingsContainerState extends State<NotificationsSettingsContainer> {
+  bool _notificationsEnabled = true;
+
+  Widget SettingsContainer(
+  IconData? icon, 
+  String text, 
+  String? image, 
+  bool hasSwitch, 
+  {bool? switchValue, 
+  ValueChanged<bool>? onSwitchChanged}
+) {
+  return Builder(builder: (context) {
+    final size = MediaQuery.of(context).size;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xffDFF6FF), 
+        borderRadius: BorderRadius.circular(13)
+      ),
+      padding: EdgeInsets.symmetric(
+        vertical: size.height * 0.02,
+        horizontal: size.width * 0.04,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              if (icon != null)
+                Icon(
+                  icon,
+                  color: Color(0xff1FAAEA),
+                  size: size.width * 0.06,
+                )
+              else if (image != null)
+                Image.asset(
+                  image,
+                  width: size.width * 0.06,
+                  height: size.width * 0.06,
+                ),
+              SizedBox(width: size.width * 0.03),
+              Text(
+                text,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontFamily: 'Roboto', // Replace with your font
+                  fontSize: size.width * 0.045,
+                  fontWeight: FontWeight.w500
+                ),
+              ),
+            ],
+          ),
+          if (hasSwitch)
+            Switch(
+              value: switchValue ?? false, 
+              onChanged: onSwitchChanged,
+              activeColor: Color(0xff1FAAEA),
+              activeTrackColor: Color(0xff1FAAEA).withOpacity(0.5),
+              thumbColor: MaterialStateProperty.all(Colors.white),
+            ),
+        ],
+      ),
+    );
+  });
+}
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return SettingsContainer(
+      Icons.notifications_none,
+      'Notifications',
+      '',
+      true,
+      switchValue: _notificationsEnabled,
+      onSwitchChanged: (value) {
+        setState(() {
+          _notificationsEnabled = value;
+          // Optional: Add logic to save notification preference
+          // e.g., SharedPreferences or Firebase
+        });
+      },
+    );
   }
 }
+
+
+

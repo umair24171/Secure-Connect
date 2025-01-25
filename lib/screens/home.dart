@@ -31,6 +31,7 @@ void initState() {
     final containerHeight = size.height * 0.1;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(

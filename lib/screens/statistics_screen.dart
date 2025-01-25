@@ -74,30 +74,76 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
+  Widget SettingsContainer(
+  IconData? icon, 
+  String text, 
+  String? image, 
+  bool hasSwitch, 
+  {bool? switchValue, 
+  ValueChanged<bool>? onSwitchChanged}
+) {
+  return Builder(builder: (context) {
+    final size = MediaQuery.of(context).size;
+
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Color(0xffDFF6FF), 
+        borderRadius: BorderRadius.circular(13)
+      ),
+      padding: EdgeInsets.symmetric(
+        vertical: size.height * 0.02,
+        horizontal: size.width * 0.04,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              if (icon != null)
+                Icon(
+                  icon,
+                  color: Color(0xff1FAAEA),
+                  size: size.width * 0.06,
+                )
+              else if (image != null)
+                Image.asset(
+                  image,
+                  width: size.width * 0.06,
+                  height: size.width * 0.06,
+                ),
+              SizedBox(width: size.width * 0.03),
+              Text(
+                text,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontFamily: 'Roboto', // Replace with your font
+                  fontSize: size.width * 0.045,
+                  fontWeight: FontWeight.w500
+                ),
+              ),
+            ],
+          ),
+         
+        ],
+      ),
+    );
+  });
+}
+
+
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final double paddingScale = size.width * 0.05;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         toolbarHeight: size.height * 0.1,
         backgroundColor: const Color(0xff66C7F4),
-        // leading: IconButton(
-        //   icon: Container(
-        //     decoration: const BoxDecoration(
-        //       shape: BoxShape.circle,
-        //       color: Color(0xffDFF6FF),
-        //     ),
-        //     child: Icon(
-        //       Icons.arrow_back,
-        //       color: Colors.black,
-        //       size: size.height * 0.03,
-        //     ),
-        //   ),
-        //   onPressed: () => Navigator.of(context).pop(),
-        // ),
         centerTitle: true,
         title: Text(
           'Statistics',
@@ -127,7 +173,22 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 ),
                 child: SingleChildScrollView(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      SettingsContainer(null, '(17) Total scam calls detected', null, false),
+
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10,horizontal: 10),
+                        child: Text(
+                                    'Scam call detection analytics',
+                                    style: TextStyle(
+                                      fontFamily: fontFamily,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xff1FAAEA),
+                                      fontSize: 18
+                                    ),
+                                  ),
+                      ),
                       // First Row: Circle Graphs
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -145,6 +206,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                         ],
                       ),
                       SizedBox(height: size.height * 0.07),
+                       Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 0,horizontal: 10),
+                        child: Text(
+                                    'Age-based call flaged',
+                                    style: TextStyle(
+                                      fontFamily: fontFamily,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xff1FAAEA),
+                                      fontSize: 18
+                                    ),
+                                  ),
+                      ),
                       // Line Graph
                       _buildLineGraph(),
                     ],
@@ -156,63 +229,69 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   Widget _buildPieChart(String title, Map<String, double> data,bool isProceed) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-
-// mainAxisAlignment: MainAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10,horizontal: 20),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontFamily: fontFamily,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        PieChart(
-          dataMap: data,
-          emptyColor: Color(0xffDFDFDF),
-          animationDuration: const Duration(milliseconds: 800),
-          chartLegendSpacing: 20,
+    return Card(
+      color: Color(0xffDFF6FF),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16,vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
         
-          chartRadius: 80,
-          colorList:  const [
-        // if(isProceed) 
-           Color(0xff058B1E),
-      //  if(!isProceed) 
-           Color(0xffD20D0D),
+        // mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10,horizontal: 0),
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontFamily: fontFamily,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            PieChart(
+              dataMap: data,
+              emptyColor: Color(0xffDFDFDF),
+              animationDuration: const Duration(milliseconds: 800),
+              chartLegendSpacing: 20,
+            
+              chartRadius: 80,
+              colorList:  const [
+            // if(isProceed) 
+               Color(0xff058B1E),
+          //  if(!isProceed) 
+               Color(0xffD20D0D),
+              ],
+              initialAngleInDegree: 0,
+              chartType: ChartType.ring,
+              ringStrokeWidth: 10,
+              legendOptions:  const LegendOptions(
+                showLegendsInRow: false,
+                legendPosition: LegendPosition.right,
+                showLegends: false,
+              ),
+              chartValuesOptions: const ChartValuesOptions(
+                showChartValueBackground: true,
+                showChartValues: true,
+                showChartValuesInPercentage: true,
+                showChartValuesOutside: false,
+              ),
+            ),
           ],
-          initialAngleInDegree: 0,
-          chartType: ChartType.ring,
-          ringStrokeWidth: 20,
-          legendOptions:  const LegendOptions(
-            showLegendsInRow: false,
-            legendPosition: LegendPosition.right,
-            showLegends: true,
-          ),
-          chartValuesOptions: const ChartValuesOptions(
-            showChartValueBackground: true,
-            showChartValues: true,
-            showChartValuesInPercentage: true,
-            showChartValuesOutside: false,
-          ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildLineGraph() {
     return Column(
       children: [
-        Text(
-          'Calls by Age Group',
-          style: TextStyle(
-            fontFamily: fontFamily,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        // Text(
+        //   'Calls by Age Group',
+        //   style: TextStyle(
+        //     fontFamily: fontFamily,
+        //     fontWeight: FontWeight.bold,
+        //   ),
+        // ),
        SfCartesianChart(
   primaryXAxis: const CategoryAxis(),
   series: [

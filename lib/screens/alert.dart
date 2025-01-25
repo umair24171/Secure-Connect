@@ -1,10 +1,13 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
 import 'package:secureconnect/models/caller_info.dart';
 import 'dart:developer' as developer;
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 // screens/alert_screen.dart
 class AlertScreen extends StatelessWidget {
@@ -26,6 +29,7 @@ class AlertScreen extends StatelessWidget {
     try {
       // Save caller info to Firebase
       await FirebaseFirestore.instance.collection('proceed-calls').add({
+        'userId':FirebaseAuth.instance.currentUser?.uid ?? '',
         'phoneNumber': phoneNumber,
         'callerName': callerInfo?.name ?? 'Unknown',
         'callType': callType.toString(),
@@ -226,7 +230,7 @@ class ProceedDialog extends StatefulWidget {
   final String fontFamily;
   final String phoneNumber;
 
-  const ProceedDialog({
+  const ProceedDialog({super.key, 
     required this.context,
     required this.size,
     required this.fontFamily,
@@ -240,6 +244,36 @@ class ProceedDialog extends StatefulWidget {
 class _ProceedDialogState extends State<ProceedDialog> {
   bool? didProceed;
   String? selectedReason;
+
+   Future<void> _submitProceedCallData() async {
+    if (didProceed == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select if you proceeded with the call')),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.collection('proceed-calls').add({
+        'phoneNumber': widget.phoneNumber,
+        'didProceed': didProceed,
+        'proceedReason': didProceed == true ? selectedReason : null,
+        'timestamp': FieldValue.serverTimestamp(),
+        'userId': FirebaseAuth.instance.currentUser?.uid,
+      });
+
+      // Clear last call number from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('last_call_phone_number');
+
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to submit data: $e')),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -337,13 +371,10 @@ class _ProceedDialogState extends State<ProceedDialog> {
                   ),
                   minimumSize: Size(0, widget.size.height * 0.045),
                 ),
-                onPressed: () {
-                  // Here you can handle the feedback submission
-                  Navigator.pop(context);
-                },
+               onPressed: () => _submitProceedCallData(),
                 child: Center(
                   child: Text(
-                    'Submit',
+                    'Proceed',
                     style: TextStyle(
                       color: Colors.white,
                       fontFamily: widget.fontFamily,
