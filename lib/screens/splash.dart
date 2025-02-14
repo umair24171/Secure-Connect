@@ -11,9 +11,6 @@ class Splash extends StatefulWidget {
 }
 
 class _SplashState extends State<Splash> {
-  
-
- 
   @override
   void initState() {
     super.initState();
@@ -23,14 +20,15 @@ class _SplashState extends State<Splash> {
         context,
         MaterialPageRoute(
           // Replace 'StartScreen' with your actual start screen widget name
-          builder: (context) => FirebaseAuth.instance.currentUser!=null?CustomBottomBar() :StartScreen(),
+          builder: (context) => FirebaseAuth.instance.currentUser != null
+              ? const CustomBottomBar()
+              : StartScreen(),
         ),
       );
     });
-    
+
 //  init();
   }
-  
 
   @override
   Widget build(BuildContext context) {

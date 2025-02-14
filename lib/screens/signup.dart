@@ -105,12 +105,16 @@ class Signup extends StatelessWidget {
                                 keyboardType: TextInputType.emailAddress,
                               ),
                               SizedBox(height: size.height * 0.02),
-                              _buildTextField(
-                                controller: pass,
-                                hintText: 'Password',
-                                prefixIcon: Icons.lock_rounded,
-                                suffixIcon: Icons.visibility_off,
-                                isPassword: true,
+                              Consumer<UserProvider>(
+                                builder: (context,userpro,_) {
+                                  return _buildTextField(
+                                    controller: pass,
+                                    hintText: 'Password',
+                                    prefixIcon: Icons.lock_rounded,
+                                    suffixIcon: Icons.visibility_off,
+                                    isPassword: userpro.isPassVisible,
+                                  );
+                                }
                               ),
                               SizedBox(height: size.height * 0.03),
                               _buildButton(
@@ -186,7 +190,7 @@ class Signup extends StatelessWidget {
                           onTap: () {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => Login()),
+                              MaterialPageRoute(builder: (context) => LoginScreen()),
                             );
                           },
                           child: RichText(
@@ -268,11 +272,13 @@ class Signup extends StatelessWidget {
     IconData? suffixIcon,
     bool isPassword = false,
     TextInputType? keyboardType,
+    // bool? isPasVisible
   }) {
     return TextFormField(
       controller: controller,
       obscureText: isPassword,
       keyboardType: keyboardType,
+      
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: TextStyle(
@@ -296,10 +302,23 @@ class Signup extends StatelessWidget {
           color: const Color(0xff429AFF),
         ),
         suffixIcon: suffixIcon != null
-            ? Icon(
-                suffixIcon,
-                color: const Color(0xff429AFF),
-              )
+            ? Consumer<UserProvider>(
+              builder: (context,userPro,_) {
+                return InkWell(
+                  onTap: (){
+                    if(userPro.isPassVisible){
+                      userPro.setIsPassValue(false);
+                    }else{
+ userPro.setIsPassValue(true);
+                    }
+                  },
+                  child: Icon(
+                  userPro.isPassVisible?Icons.visibility   : Icons.visibility_off,
+                      color: const Color(0xff429AFF),
+                    ),
+                );
+              }
+            )
             : null,
       ),
     );

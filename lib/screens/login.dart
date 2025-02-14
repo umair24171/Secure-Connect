@@ -5,8 +5,8 @@ import 'package:secureconnect/controllers/userprovider.dart';
 import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/signup.dart';
 
-class Login extends StatelessWidget {
-  Login({super.key});
+class LoginScreen extends StatelessWidget {
+  LoginScreen({super.key});
 
   final String fontFamily = 'Roboto';
   final TextEditingController email = TextEditingController();
@@ -68,12 +68,16 @@ class Login extends StatelessWidget {
                             keyboardType: TextInputType.emailAddress,
                           ),
                           SizedBox(height: size.height * 0.02),
-                          _buildTextField(
-                            controller: password,
-                            hintText: 'Password',
-                            prefixIcon: Icons.lock_rounded,
-                            suffixIcon: Icons.visibility_off,
-                            isPassword: true,
+                          Consumer<UserProvider>(
+                            builder: (context,userPro,_) {
+                              return _buildTextField(
+                                controller: password,
+                                hintText: 'Password',
+                                prefixIcon: Icons.lock_rounded,
+                                suffixIcon: Icons.visibility_off,
+                                isPassword: userPro.isPassVisible,
+                              );
+                            }
                           ),
                           SizedBox(height: size.height * 0.04),
                           _buildButton(
@@ -190,10 +194,23 @@ class Login extends StatelessWidget {
           color: const Color(0xff429AFF),
         ),
         suffixIcon: suffixIcon != null
-            ? Icon(
-                suffixIcon,
-                color: const Color(0xff429AFF),
-              )
+            ? Consumer<UserProvider>(
+              builder: (context,userPro,_) {
+                return InkWell(
+                  onTap: (){
+                    if(userPro.isPassVisible){
+                      userPro.setIsPassValue(false);
+                    }else{
+ userPro.setIsPassValue(true);
+                    }
+                  },
+                  child: Icon(
+                  userPro.isPassVisible?Icons.visibility   : Icons.visibility_off,
+                      color: const Color(0xff429AFF),
+                    ),
+                );
+              }
+            )
             : null,
       ),
     );

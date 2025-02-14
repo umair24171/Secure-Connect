@@ -14,8 +14,8 @@ class ShareServices {
       ),
        iosParameters: const IOSParameters(bundleId: 'com.app.secureconnect',minimumVersion: '1'),
       socialMetaTagParameters: SocialMetaTagParameters(
-        title: 'Voisbe Profile',
-        description: 'Voisbe Profile',
+        title: 'Secure Connect',
+        description: 'secure connect',
         imageUrl: Uri.parse(
             'https://firebasestorage.googleapis.com/v0/b/voisbe-1f7b6.appspot.com/o/voisbe_logo.png?alt=media&token=3b3b3b3b-3b3b-3b3b-3b3b-3b3b3b3b3b3b'),
       ),

@@ -61,7 +61,7 @@ void _updateStateAndFetchInfo(Map<String, dynamic> data) async{
         callType = type;
         _isLoading = true;
       });
-      _fetchContactName();
+      // _fetchContactName();
       
       // Run fetch in a microtask to avoid potential race conditions
       Future.microtask(() {

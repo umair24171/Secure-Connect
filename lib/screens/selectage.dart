@@ -74,6 +74,7 @@ class _SelectAgeState extends State<SelectAge> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color(0xff66C7F4),
                         fixedSize: Size(70, 70),
+                        padding: EdgeInsets.all(0),
                         shape: CircleBorder(),
                       ),
                       onPressed: () {
@@ -107,8 +108,8 @@ class _SelectAgeState extends State<SelectAge> {
       },
       child: Container(
         height: 50,
-        width: 130,
-        margin: EdgeInsets.symmetric(horizontal: 20),
+        width: 126,
+        // margin: EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
           color: isSelected ? Color(0xff3399CC) : Color(0xff66C7F4),
           shape: BoxShape.rectangle,
@@ -122,7 +123,7 @@ class _SelectAgeState extends State<SelectAge> {
               color: Colors.white,
               fontFamily: fontFamily,
               fontWeight: FontWeight.w500,
-              fontSize: 17,
+              fontSize: 18,
             ),
           ),
         ),

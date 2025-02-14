@@ -15,6 +15,17 @@ class UserProvider with ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
+ bool _isPassVisible=false;
+
+ bool get isPassVisible=>_isPassVisible;
+
+
+ setIsPassValue(bool value){
+  _isPassVisible=value;
+  notifyListeners();
+
+ }
+
   Future<bool> signup({
     required String email,
     required String password,
@@ -65,7 +76,7 @@ class UserProvider with ChangeNotifier {
         if (context.mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => Login()),
+            MaterialPageRoute(builder: (context) => LoginScreen()),
           );
         }
         return true;

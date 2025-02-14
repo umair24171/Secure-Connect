@@ -5,6 +5,7 @@ import 'package:secureconnect/controllers/share_services.dart';
 import 'package:secureconnect/screens/blockcalls.dart';
 import 'package:secureconnect/screens/calls.dart';
 import 'package:secureconnect/screens/help_support.dart';
+import 'package:secureconnect/screens/login.dart';
 import 'package:secureconnect/screens/scamcalls.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -22,10 +23,11 @@ class SettingsScreen extends StatelessWidget {
           automaticallyImplyLeading: false,
           toolbarHeight: size.height * 0.1,
           backgroundColor: Color(0xff66C7F4),
+          leadingWidth: size.height * 0.1,
           leading: Container(
             margin: EdgeInsets.only(left: 10),
-            height: size.height * 0.04,
-            width: size.height * 0.04,
+            height: 35,
+            width:35,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               color: Color(0xffDFF6FF),
@@ -165,7 +167,7 @@ class SettingsScreen extends StatelessWidget {
 
       if (success) {
         // Navigate to login or welcome screen
-        Navigator.of(context).pushReplacementNamed('/login');
+        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context)=>LoginScreen()),(route)=>false );
         
         // Optionally show a success message
         ScaffoldMessenger.of(context).showSnackBar(

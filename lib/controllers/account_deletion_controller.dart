@@ -25,7 +25,7 @@ class AccountDeletionService {
 
       // Delete user's blocked contacts
       await _firestore
-          .collection('blocked_contacts')
+          .collection('blockedContacts')
           .where('userId', isEqualTo: currentUser.uid)
           .get()
           .then((snapshot) {
@@ -40,7 +40,7 @@ class AccountDeletionService {
       // Delete the user account
       await currentUser.delete();
 
-      return true;
+      return true;  
     } catch (e) {
       print('Account deletion error: $e');
       return false;
