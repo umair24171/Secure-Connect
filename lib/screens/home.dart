@@ -24,7 +24,7 @@ class _HomeState extends State<Home> {
    @override
 void initState() {
   super.initState();
-   getNumberInfo();
+  //  getNumberInfo();
   // CallDetectionService().initialize(context);
 }
  getNumberInfo(){

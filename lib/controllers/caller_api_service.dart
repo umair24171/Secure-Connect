@@ -10,10 +10,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/caller_info.dart';
 
 class CallerApiService {
-  // ✅ UPDATED: Eyecon RapidAPI endpoint (Dec 2025)
+  // Eyecon RapidAPI endpoint
   static const String baseUrl = 'https://eyecon3.p.rapidapi.com/api/v1';
-  static const String apiKey = '3ac06090ddmsh67199c62f193313p11d9e2jsnedbd6beeae61'; // Replace with your RapidAPI key
-  static const String apiHost = 'eyecon.p.rapidapi.com'; // ✅ HOST WITHOUT "3"
+  static const String apiKey = '3ac06090ddmsh67199c62f193313p11d9e2jsnedbd6beeae61';
+  static const String apiHost = 'eyecon.p.rapidapi.com'; // FIXED: Should match baseUrl
   static const int maxRetries = 3;
   final _client = http.Client();
 
@@ -22,12 +22,19 @@ class CallerApiService {
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult == ConnectivityResult.none) {
+        log('No network connectivity');
         return false;
       }
       
-      // Double check with an actual internet test
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      // Quick internet check with timeout
+      try {
+        final result = await InternetAddress.lookup('google.com')
+            .timeout(Duration(seconds: 3));
+        return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      } on TimeoutException {
+        log('Internet check timed out');
+        return false;
+      }
     } catch (e) {
       log('Network check error: $e');
       return false;
@@ -36,6 +43,9 @@ class CallerApiService {
 
   /// Fetch caller information from Eyecon3 RapidAPI
   Future<CallerInfo?> getNumberInfo(String phoneNumber) async {
+    log('=== Starting API call for: $phoneNumber ===');
+    
+    // Check internet first
     if (!await _checkInternetConnection()) {
       log('No internet connection available');
       return null;
@@ -44,16 +54,18 @@ class CallerApiService {
     int attempts = 0;
     while (attempts < maxRetries) {
       try {
-        // Parse phone number into country code and number
+        // Parse phone number
         final parsedNumber = _parsePhoneNumber(phoneNumber);
         final countryCode = parsedNumber['code'];
         final number = parsedNumber['number'];
         
-        // ✅ Eyecon3 endpoint: /search?code={country_code}&number={number}
-        final url = '$baseUrl/search?code=$countryCode&number=$number';
+        log('Parsed - Code: $countryCode, Number: $number');
         
-        log('Attempt ${attempts + 1}: Requesting URL: $url');
-
+        // Build URL
+        final url = '$baseUrl/search?code=$countryCode&number=$number';
+        log('API URL: $url');
+        
+        // Make request with timeout
         final response = await _client.get(
           Uri.parse(url),
           headers: {
@@ -64,66 +76,99 @@ class CallerApiService {
         ).timeout(
           const Duration(seconds: 10),
           onTimeout: () {
+            log('Request timed out (attempt ${attempts + 1})');
             throw TimeoutException('Request timed out');
           },
         );
         
         log('Response status: ${response.statusCode}');
         log('Response headers: ${response.headers}');
-        log('Response body: ${response.body}');
+        log('Response body (first 500 chars): ${response.body.substring(0, math.min(500, response.body.length))}');
         
         if (response.statusCode == 200) {
-          final jsonResponse = json.decode(response.body);
-          
-          // ✅ Check if response is successful
-          if (jsonResponse['status'] != true) {
-            log('API returned non-success status: ${jsonResponse['status']}');
+          try {
+            final jsonResponse = json.decode(response.body) as Map<String, dynamic>;
+            
+            // Check if response has expected structure
+            if (jsonResponse['status'] != true) {
+              log('API returned non-success status: ${jsonResponse['status']}');
+              log('Message: ${jsonResponse['message']}');
+              return null;
+            }
+
+            if (jsonResponse['data'] == null) {
+              log('API returned null data');
+              return null;
+            }
+
+            // Parse response
+            CallerInfo info = CallerInfo.fromJson(jsonResponse['data']);
+            log('Successfully parsed caller info: ${info.name}');
+
+            // If spam detected, save to Firebase (non-blocking)
+            if (info.isSpam) {
+              _saveSpamCallAsync(info, phoneNumber, 'incoming');
+            }
+
+            return info;
+          } catch (e, stack) {
+            log('Error parsing API response: $e');
+            log('Stack trace: $stack');
             return null;
           }
-
-          // ✅ Parse Eyecon3 response
-          CallerInfo info = CallerInfo.fromJson(jsonResponse['data']);
-
-          // If the call is detected as spam, add to Firebase
-          if (info.isSpam) {
-            await addSpamCallToFirebase(info, phoneNumber, 'incoming');
-          }
-
-          return info;
         } else if (response.statusCode == 429) {
           // Rate limit - exponential backoff
-          log('Rate limit hit, retrying with backoff...');
+          log('Rate limit hit (attempt ${attempts + 1})');
           await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
           attempts++;
           continue;
         } else if (response.statusCode == 403) {
-          log('Invalid API key or subscription expired');
+          log('API authentication failed - check API key');
           return null;
         } else {
           log('API error: ${response.statusCode} - ${response.body}');
           return null;
         }
       } on SocketException catch (e) {
-        log('Socket error on attempt ${attempts + 1}: $e');
+        log('Socket error (attempt ${attempts + 1}): $e');
         if (attempts + 1 < maxRetries) {
           await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
           attempts++;
           continue;
         }
-        rethrow;
+        return null;
+      } on TimeoutException catch (e) {
+        log('Timeout (attempt ${attempts + 1}): $e');
+        if (attempts + 1 < maxRetries) {
+          await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
+          attempts++;
+          continue;
+        }
+        return null;
       } catch (e, stackTrace) {
-        log('Error on attempt ${attempts + 1}', error: e, stackTrace: stackTrace);
+        log('Unexpected error (attempt ${attempts + 1}): $e');
+        log('Stack trace: $stackTrace');
         if (attempts + 1 < maxRetries) {
           await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
           attempts++;
           continue;
         }
-        rethrow;
+        return null;
       }
     }
     
-    log('All retry attempts failed');
+    log('All retry attempts failed for: $phoneNumber');
     return null;
+  }
+
+  /// Save spam call to Firebase (async, won't block UI)
+  Future<void> _saveSpamCallAsync(
+    CallerInfo callerInfo, 
+    String phoneNumber, 
+    String callType
+  ) async {
+    // Run in background, don't await
+    Future.microtask(() => addSpamCallToFirebase(callerInfo, phoneNumber, callType));
   }
 
   /// Add spam call information to Firebase Firestore
@@ -143,7 +188,7 @@ class CallerApiService {
         return;
       }
 
-      // Create a SpamCall object with current user info
+      // Create SpamCall object
       final spamCall = SpamCall(
         phoneNumber: phoneNumber,
         timestamp: DateTime.now(),
@@ -157,15 +202,17 @@ class CallerApiService {
         userId: userId,
       );
 
-      // Save to Firestore with phone number as document ID
+      // Save to Firestore with timeout
       await firestore
           .collection('spam_calls')
           .doc(phoneNumber)
-          .set(spamCall.toMap(), SetOptions(merge: true));
+          .set(spamCall.toMap(), SetOptions(merge: true))
+          .timeout(Duration(seconds: 5));
 
-      log('Spam call added to Firebase: $phoneNumber (Spam count: ${callerInfo.spamCount})');
+      log('Spam call saved: $phoneNumber (Count: ${callerInfo.spamCount})');
     } catch (e, stackTrace) {
-      log('Error adding spam call to Firebase', error: e, stackTrace: stackTrace);
+      log('Error saving spam call: $e');
+      log('Stack trace: $stackTrace');
     }
   }
 
@@ -179,13 +226,16 @@ class CallerApiService {
           .collection('spam_calls')
           .where('userId', isEqualTo: userId)
           .orderBy('timestamp', descending: true)
-          .get();
+          .limit(100) // Add limit for performance
+          .get()
+          .timeout(Duration(seconds: 10));
 
       return snapshot.docs
           .map((doc) => SpamCall.fromMap({...doc.data(), 'id': doc.id}))
           .toList();
     } catch (e, stackTrace) {
-      log('Error fetching spam calls', error: e, stackTrace: stackTrace);
+      log('Error fetching spam calls: $e');
+      log('Stack trace: $stackTrace');
       return [];
     }
   }
@@ -196,11 +246,13 @@ class CallerApiService {
       await FirebaseFirestore.instance
           .collection('spam_calls')
           .doc(phoneNumber)
-          .delete();
+          .delete()
+          .timeout(Duration(seconds: 5));
       log('Spam call deleted: $phoneNumber');
       return true;
     } catch (e, stackTrace) {
-      log('Error deleting spam call', error: e, stackTrace: stackTrace);
+      log('Error deleting spam call: $e');
+      log('Stack trace: $stackTrace');
       return false;
     }
   }
@@ -209,64 +261,42 @@ class CallerApiService {
   Map<String, String> _parsePhoneNumber(String phoneNumber) {
     String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
     
-    // Remove leading zero if present
-    if (cleaned.startsWith('0')) {
+    // Remove leading zero
+    if (cleaned.startsWith('0') && cleaned.length > 1) {
       cleaned = cleaned.substring(1);
     }
     
-    // Extract country code
     String countryCode = '92'; // Default Pakistan
     String number = cleaned;
     
     if (cleaned.startsWith('+')) {
-      // Has + prefix
       cleaned = cleaned.substring(1);
       
-      // Extract country code (1-3 digits)
+      // Extract country code
       if (cleaned.startsWith('92')) {
         countryCode = '92';
         number = cleaned.substring(2);
-      } else if (cleaned.startsWith('1')) {
+      } else if (cleaned.startsWith('1') && cleaned.length == 11) {
         countryCode = '1';
         number = cleaned.substring(1);
       } else if (cleaned.length > 10) {
-        // Try to extract country code
-        countryCode = cleaned.substring(0, cleaned.length - 10);
-        number = cleaned.substring(cleaned.length - 10);
+        // Try to extract country code (1-3 digits)
+        final possibleCode = cleaned.substring(0, math.min(3, cleaned.length - 10));
+        if (possibleCode.isNotEmpty) {
+          countryCode = possibleCode;
+          number = cleaned.substring(possibleCode.length);
+        }
       }
-    } else if (cleaned.startsWith('92')) {
-      // Has country code without +
+    } else if (cleaned.startsWith('92') && cleaned.length > 10) {
       countryCode = '92';
       number = cleaned.substring(2);
     } else if (cleaned.startsWith('1') && cleaned.length == 11) {
-      // US number
       countryCode = '1';
       number = cleaned.substring(1);
-    } else {
-      // No country code, add default
-      number = cleaned;
     }
     
     log('Parsed phone - Code: $countryCode, Number: $number');
     return {'code': countryCode, 'number': number};
-  }
-
-  /// Format phone number to E.164 format (for display/storage)
-  String _formatToE164(String phoneNumber) {
-    String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
-    
-    // Remove leading zero if present
-    if (cleaned.startsWith('0')) {
-      cleaned = cleaned.substring(1);
-    }
-    
-    // Add Pakistan country code if not present
-    if (!cleaned.startsWith('+')) {
-      cleaned = '+92$cleaned';
-    }
-    
-    log('Formatted phone number: $cleaned');
-    return cleaned;
   }
 
   /// Clean up resources
