@@ -1,39 +1,86 @@
-import 'package:firebase_dynamic_links/firebase_dynamic_links.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:app_links/app_links.dart';
+import 'dart:async';
 
 class ShareServices {
+  final FirebaseFunctions functions = FirebaseFunctions.instance;
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription? _linkSubscription;
 
- final dynamicLink = FirebaseDynamicLinks.instance;
-   Future<String> referFriend(String userId) async {
-    final DynamicLinkParameters dynamicLinkParameters = DynamicLinkParameters(
-      uriPrefix: 'https://secureconnectapp.page.link',
-      link: Uri.parse('https://secureconnectapp.page.link?userId=$userId'),
-      androidParameters: const AndroidParameters(
-        packageName: 'com.app.secureconnect',
-        minimumVersion: 1,
-      ),
-       iosParameters: const IOSParameters(bundleId: 'com.app.secureconnect',minimumVersion: '1'),
-      socialMetaTagParameters: SocialMetaTagParameters(
-        title: 'Secure Connect',
-        description: 'secure connect',
-        imageUrl: Uri.parse(
-            'https://firebasestorage.googleapis.com/v0/b/voisbe-1f7b6.appspot.com/o/voisbe_logo.png?alt=media&token=3b3b3b3b-3b3b-3b3b-3b3b-3b3b3b3b3b3b'),
-      ),
-    );
-
-    final shortLink = await dynamicLink.buildShortLink(dynamicLinkParameters);
-    return shortLink.shortUrl.toString();
+  Future<String> referFriend(String userId) async {
+    try {
+      final HttpsCallable callable = functions.httpsCallable('generateShareLink');
+      final result = await callable.call({'userId': userId});
+      
+      return result.data['shareLink'] ?? '';
+    } catch (e) {
+      debugPrint('Error generating share link: $e');
+      return 'https://connect-675b1.web.app/refer?userId=$userId';
+    }
   }
 
-  void initDynamicLinksForRefer(BuildContext context) async {
-    FirebaseDynamicLinks.instance.onLink.listen((dynamicLinkData) async {
-      final Uri deepLink = dynamicLinkData.link;
+  void initDeepLinkListener(BuildContext context) {
+    // Handle initial link if app was opened from a link
+    _handleInitialLink(context);
+    
+    // Listen for links while app is running
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      (Uri? uri) {
+        if (uri != null) {
+          _handleDeepLink(uri, context);
+        }
+      },
+      onError: (err) {
+        debugPrint('Deep Link Error: $err');
+      },
+    );
+  }
 
-      final queryParams = deepLink.queryParameters;
-      final userId = queryParams['userId'];
-     
-    }).onError((error) {
-      debugPrint('Dynamic Link Error: $error');
-    });
+  Future<void> _handleInitialLink(BuildContext context) async {
+    try {
+      final uri = await _appLinks.getInitialLink();
+      if (uri != null) {
+        _handleDeepLink(uri, context);
+      }
+    } catch (e) {
+      debugPrint('Failed to get initial link: $e');
+    }
+  }
+
+  void _handleDeepLink(Uri uri, BuildContext context) {
+    debugPrint('Received deep link: $uri');
+    
+    if (uri.path.contains('refer')) {
+      final userId = uri.queryParameters['userId'];
+      
+      if (userId != null) {
+        _processReferral(userId, context);
+      }
+    }
+  }
+
+  Future<void> _processReferral(String referrerId, BuildContext context) async {
+    debugPrint('Referred by user: $referrerId');
+    
+    // TODO: Save referrer to your database/backend
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Welcome!'),
+        content: Text('You were invited by a friend!'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Get Started'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void dispose() {
+    _linkSubscription?.cancel();
   }
 }

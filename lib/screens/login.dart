@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:provider/provider.dart';
 import 'package:secureconnect/controllers/userprovider.dart';
+import 'package:secureconnect/screens/custom_bottom_bar.dart';
 import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/signup.dart';
 
@@ -107,10 +108,10 @@ class LoginScreen extends StatelessWidget {
                             onPressed: userPro.isLoading
                                 ? null
                                 : () {
-                                    Navigator.pushReplacement(
+                                    Navigator.pushAndRemoveUntil(
                                       context,
                                       MaterialPageRoute(
-                                          builder: (context) => Home()),
+                                          builder: (context) => CustomBottomBar()),(s)=>false
                                     );
                                   },
                           ),

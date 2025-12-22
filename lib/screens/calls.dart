@@ -1,10 +1,10 @@
 import 'dart:developer';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:direct_call_plus/direct_call_plus.dart';
+import 'package:flutter_direct_call_plus/flutter_direct_call.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:contacts_service/contacts_service.dart';
+import 'package:flutter_contacts/flutter_contacts.dart'; // UPDATED
 
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io' show Platform;
@@ -26,7 +26,6 @@ class _CallsState extends State<Calls> {
   List<Contact> contacts = [];
   List<Contact> favoriteContacts = [];
   bool isLoading = true;
- 
   bool hasPermission = false;
 
   // Simulated call log for iOS (you would typically get this from your backend)
@@ -36,10 +35,10 @@ class _CallsState extends State<Calls> {
   void initState() {
     super.initState();
     initializeData();
-    // Initialize demo call data for iOS
-    if (Platform.isIOS) {
-      initializeDemoCallData();
-    }
+    // // Initialize demo call data for iOS
+    // if (Platform.isIOS) {
+    //   initializeDemoCallData();
+    // }
   }
 
   void initializeDemoCallData() {
@@ -85,41 +84,39 @@ class _CallsState extends State<Calls> {
       isLoading = true;
     });
 
-    // Request contacts permission
-    final status = await Permission.contacts.request();
-    
-    if (status.isGranted) {
-      try {
-        // Load all contacts
-        Iterable<Contact> contactsList = await ContactsService.getContacts(
-          withThumbnails: false, // Set to true if you want contact photos
-          orderByGivenName: true,
-        );
-        
-        // Filter out contacts without phone numbers
-        List<Contact> validContacts = contactsList.where((contact) {
-          return contact.phones != null && 
-                 contact.phones!.isNotEmpty && 
-                 contact.displayName != null;
-        }).toList();
+    // Request contacts permission using flutter_contacts
+    if (!await FlutterContacts.requestPermission(readonly: true)) {
+      setState(() {
+        isLoading = false;
+        hasPermission = false;
+      });
+      return;
+    }
 
-        // Sort contacts alphabetically
-        validContacts.sort((a, b) => 
-          (a.displayName ?? '').compareTo(b.displayName ?? ''));
+    try {
+      // Load all contacts with properties
+      List<Contact> contactsList = await FlutterContacts.getContacts(
+        withProperties: true,
+        withPhoto: false,
+      );
+      
+      // Filter out contacts without phone numbers
+      List<Contact> validContacts = contactsList.where((contact) {
+        return contact.phones.isNotEmpty && 
+               contact.displayName.isNotEmpty;
+      }).toList();
 
-        setState(() {
-          contacts = validContacts;
-          hasPermission = true;
-          isLoading = false;
-        });
-      } catch (e) {
-        print('Error loading contacts: $e');
-        setState(() {
-          isLoading = false;
-          hasPermission = false;
-        });
-      }
-    } else {
+      // Sort contacts alphabetically
+      validContacts.sort((a, b) => 
+        a.displayName.compareTo(b.displayName));
+
+      setState(() {
+        contacts = validContacts;
+        hasPermission = true;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading contacts: $e');
       setState(() {
         isLoading = false;
         hasPermission = false;
@@ -130,8 +127,8 @@ class _CallsState extends State<Calls> {
   List<Contact> getFilteredContacts() {
     if (searchQuery.isEmpty) return contacts;
     return contacts.where((contact) {
-      final name = contact.displayName?.toLowerCase() ?? '';
-      final numbers = contact.phones?.map((p) => p.value?.toLowerCase() ?? '') ?? [];
+      final name = contact.displayName.toLowerCase();
+      final numbers = contact.phones.map((p) => p.number.toLowerCase());
       return name.contains(searchQuery) || 
              numbers.any((number) => number.contains(searchQuery));
     }).toList();
@@ -149,8 +146,8 @@ class _CallsState extends State<Calls> {
       // For Android, filter contacts
       if (searchQuery.isEmpty) return contacts;
       return contacts.where((contact) {
-        final name = contact.displayName?.toLowerCase() ?? '';
-        final numbers = contact.phones?.map((p) => p.value?.toLowerCase() ?? '') ?? [];
+        final name = contact.displayName.toLowerCase();
+        final numbers = contact.phones.map((p) => p.number.toLowerCase());
         return name.contains(searchQuery) || 
                numbers.any((number) => number.contains(searchQuery));
       }).toList();
@@ -159,7 +156,6 @@ class _CallsState extends State<Calls> {
 
   @override
   Widget build(BuildContext context) {
-    // Your existing build method remains the same
     final size = MediaQuery.of(context).size;
     final double paddingScale = size.width * 0.04;
     final double iconSize = size.width * 0.05;
@@ -169,7 +165,7 @@ class _CallsState extends State<Calls> {
       backgroundColor: const Color(0xffffffff),
       body: Column(
         children: [
-          // Your existing app bar code...
+          // App bar
           Container(
             height: size.height * 0.16,
             width: double.infinity,
@@ -225,7 +221,7 @@ class _CallsState extends State<Calls> {
                       padding: EdgeInsets.all(paddingScale),
                       child: Column(
                         children: [
-                          // Search Bar (your existing code)
+                          // Search Bar
                           SearchBar(
                             textStyle: MaterialStatePropertyAll(
                               TextStyle(
@@ -311,9 +307,15 @@ class _CallsState extends State<Calls> {
                               return Padding(
                                 padding: EdgeInsets.only(bottom: size.height * 0.015),
                                 child: CallListItem(
-                                  initial: contact.displayName?[0] ?? '#',
-                                  name: contact.displayName ?? 'Unknown',
-                                  number: contact.phones?.firstOrNull?.value ?? '',
+                                  initial: contact.displayName.isNotEmpty 
+                                      ? contact.displayName[0] 
+                                      : '#',
+                                  name: contact.displayName.isNotEmpty 
+                                      ? contact.displayName 
+                                      : 'Unknown',
+                                  number: contact.phones.isNotEmpty 
+                                      ? contact.phones.first.number 
+                                      : '',
                                   timestamp: DateTime.now(),
                                   callType: CallInfoType.incoming,
                                   size: size,
@@ -354,8 +356,6 @@ enum CallInfoType {
   outgoing,
   missed,
 }
-
-// Your existing QuickActionButton class remains the same...
 
 class CallListItem extends StatelessWidget {
   final String initial;
@@ -472,10 +472,10 @@ class CallListItem extends StatelessWidget {
         ),
         InkWell(
           onTap: () async{
-             bool? res = await DirectCallPlus.makeCall(number);
-             if(res?? false){
-              log('call $res');
-             }
+           await FlutterDirectCall.makeDirectCall(number);
+            //  if(res?? false){
+            //   log('call $res');
+            //  }
           },
           child: Icon(
             Icons.call,
@@ -598,309 +598,3 @@ class QuickActionButton extends StatelessWidget {
     );
   }
 }
-
-
-
-// import 'package:flutter/material.dart';
-
-// class Calls extends StatefulWidget {
-//   const Calls({super.key});
-
-//   @override
-//   State<Calls> createState() => _CallsState();
-// }
-
-// class _CallsState extends State<Calls> {
-//   final String fontFamily = 'Roboto';
-//   final TextEditingController search = TextEditingController();
-//   String searchQuery = '';
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final size = MediaQuery.of(context).size;
-//     final double paddingScale = size.width * 0.04;
-//     final double iconSize = size.width * 0.05;
-//     final double fontSize = size.width * 0.04;
-
-//     return Scaffold(
-//       backgroundColor: const Color(0xffffffff),
-//       body: Column(
-//         children: [
-//           // Custom App Bar with curved bottom
-//           Container(
-//             height: size.height * 0.16,
-//             width: double.infinity,
-//             decoration: BoxDecoration(
-//               color: const Color(0xff66C7F4),
-//               borderRadius: BorderRadius.vertical(
-//                 bottom: Radius.elliptical(size.width / 2, size.height * 0.05),
-//               ),
-//             ),
-//             child: SafeArea(
-//               child: Stack(
-//                 alignment: Alignment.center,
-//                 children: [
-//                   // Centered Title
-//                   Center(
-//                     child: Text(
-//                       'Calls',
-//                       style: TextStyle(
-//                         color: Colors.white,
-//                         fontFamily: fontFamily,
-//                         fontSize: fontSize * 1.4,
-//                         fontWeight: FontWeight.w700,
-//                       ),
-//                     ),
-//                   ),
-//                   // Back Button Container positioned on the left
-//                   Positioned(
-//                     left: paddingScale * 1.1,
-//                     child: GestureDetector(
-//                       onTap: () => Navigator.pop(context),
-//                       child: Container(
-//                         height: size.width * 0.1,
-//                         width: size.width * 0.1,
-//                         decoration: const BoxDecoration(
-//                           shape: BoxShape.circle,
-//                           color: Color(0xffDFF6FF),
-//                         ),
-//                         child: Icon(
-//                           Icons.arrow_back,
-//                           color: Colors.black,
-//                           size: iconSize,
-//                         ),
-//                       ),
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ),
-//           ),
-//           Expanded(
-//             child: SingleChildScrollView(
-//               child: Padding(
-//                 padding: EdgeInsets.all(paddingScale),
-//                 child: Column(
-//                   children: [
-//                     // Search Bar
-//                     SearchBar(
-//                       textStyle: MaterialStatePropertyAll(
-//                         TextStyle(
-//                           color: const Color(0xff494949),
-//                           fontFamily: fontFamily,
-//                           fontSize: fontSize,
-//                         ),
-//                       ),
-//                       hintText: 'Search numbers',
-//                       hintStyle: MaterialStatePropertyAll(
-//                         TextStyle(
-//                           color: const Color(0xff494949),
-//                           fontFamily: fontFamily,
-//                           fontSize: fontSize,
-//                         ),
-//                       ),
-//                       shape: const MaterialStatePropertyAll(
-//                         RoundedRectangleBorder(
-//                           borderRadius: BorderRadius.all(Radius.circular(30)),
-//                         ),
-//                       ),
-//                       surfaceTintColor:
-//                           const MaterialStatePropertyAll(Color(0xffDFF6FF)),
-//                       shadowColor:
-//                           const MaterialStatePropertyAll(Color(0xffDFF6FF)),
-//                       backgroundColor:
-//                           const MaterialStatePropertyAll(Color(0xffDFF6FF)),
-//                       elevation: const MaterialStatePropertyAll(2),
-//                       controller: search,
-//                       onChanged: (value) {
-//                         setState(() {
-//                           searchQuery = value.toLowerCase();
-//                         });
-//                       },
-//                     ),
-//                     SizedBox(height: size.height * 0.02),
-//                     // Quick Action Buttons
-//                     Row(
-//                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-//                       children: [
-//                         QuickActionButton(
-//                           size: size,
-//                           icon: Icons.person_pin_outlined,
-//                           label: 'Contact',
-//                           fontSize: fontSize,
-//                           fontFamily: fontFamily,
-//                         ),
-//                         QuickActionButton(
-//                           size: size,
-//                           icon: Icons.favorite_outline,
-//                           label: 'Favourites',
-//                           fontSize: fontSize,
-//                           fontFamily: fontFamily,
-//                         ),
-//                       ],
-//                     ),
-//                     SizedBox(height: size.height * 0.02),
-//                     // Call List
-//                     ...['A', 'N', 'L', 'A'].asMap().entries.map((entry) {
-//                       final names = ['Adil', 'Nadeem', 'Laraib', 'Ahmad'];
-//                       return Padding(
-//                         padding: EdgeInsets.only(bottom: size.height * 0.015),
-//                         child: CallListItem(
-//                           initial: entry.value,
-//                           name: names[entry.key],
-//                           size: size,
-//                           fontSize: fontSize,
-//                           fontFamily: fontFamily,
-//                         ),
-//                       );
-//                     }).toList(),
-//                   ],
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-// class QuickActionButton extends StatelessWidget {
-//   final Size size;
-//   final IconData icon;
-//   final String label;
-//   final double fontSize;
-//   final String fontFamily;
-
-//   const QuickActionButton({
-//     super.key,
-//     required this.size,
-//     required this.icon,
-//     required this.label,
-//     required this.fontSize,
-//     required this.fontFamily,
-//   });
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Container(
-//       height: size.height * 0.11,
-//       width: size.width * 0.28,
-//       decoration: BoxDecoration(
-//         borderRadius: BorderRadius.circular(13),
-//         color: const Color(0xffDFF6FF),
-//       ),
-//       child: Column(
-//         mainAxisAlignment: MainAxisAlignment.center,
-//         children: [
-//           Icon(
-//             icon,
-//             color: const Color(0xff414141),
-//             size: size.width * 0.06,
-//           ),
-//           SizedBox(height: size.height * 0.01),
-//           Text(
-//             label,
-//             style: TextStyle(
-//               color: const Color(0xff414141),
-//               fontFamily: fontFamily,
-//               fontSize: fontSize,
-//               fontWeight: FontWeight.w500,
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-// class CallListItem extends StatelessWidget {
-//   final String initial;
-//   final String name;
-//   final Size size;
-//   final double fontSize;
-//   final String fontFamily;
-
-//   const CallListItem({
-//     super.key,
-//     required this.initial,
-//     required this.name,
-//     required this.size,
-//     required this.fontSize,
-//     required this.fontFamily,
-//   });
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Row(
-//       children: [
-//         Container(
-//           height: size.width * 0.1,
-//           width: size.width * 0.1,
-//           decoration: const BoxDecoration(
-//             shape: BoxShape.circle,
-//             color: Color(0xff1AB7F4),
-//           ),
-//           child: Center(
-//             child: Text(
-//               initial,
-//               style: TextStyle(
-//                 color: Colors.white,
-//                 fontSize: fontSize * 1.5,
-//                 fontWeight: FontWeight.w700,
-//                 fontFamily: fontFamily,
-//               ),
-//             ),
-//           ),
-//         ),
-//         SizedBox(width: size.width * 0.03),
-//         Expanded(
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               Text(
-//                 name,
-//                 style: TextStyle(
-//                   color: Colors.black,
-//                   fontFamily: fontFamily,
-//                   fontSize: fontSize * 1.1,
-//                   fontWeight: FontWeight.w500,
-//                 ),
-//               ),
-//               Row(
-//                 children: [
-//                   Icon(
-//                     Icons.call_received_outlined,
-//                     color: const Color(0xff04960D),
-//                     size: fontSize,
-//                   ),
-//                   SizedBox(width: size.width * 0.01),
-//                   Icon(
-//                     Icons.file_present_outlined,
-//                     color: const Color(0xff848484),
-//                     size: fontSize,
-//                   ),
-//                   SizedBox(width: size.width * 0.01),
-//                   Text(
-//                     '11:15 am',
-//                     style: TextStyle(
-//                       color: const Color(0xff848484),
-//                       fontFamily: fontFamily,
-//                       fontSize: fontSize,
-//                       fontWeight: FontWeight.w500,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ],
-//           ),
-//         ),
-//         Icon(
-//           Icons.call,
-//           size: fontSize * 1.2,
-//           color: const Color(0xff444444),
-//         ),
-//       ],
-//     );
-//   }
-// }

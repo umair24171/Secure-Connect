@@ -10,8 +10,9 @@ import 'package:secureconnect/screens/scamcalls.dart';
 import 'package:share_plus/share_plus.dart';
 
 class SettingsScreen extends StatelessWidget {
-  SettingsScreen({super.key});
+  SettingsScreen({super.key,this.isMain=false});
   final String fontFamily = 'Roboto';
+final  bool isMain;
 
   @override
   Widget build(BuildContext context) {
@@ -23,20 +24,25 @@ class SettingsScreen extends StatelessWidget {
           automaticallyImplyLeading: false,
           toolbarHeight: size.height * 0.1,
           backgroundColor: Color(0xff66C7F4),
-          leadingWidth: size.height * 0.1,
-          leading: Container(
-            margin: EdgeInsets.only(left: 10),
-            height: 35,
-            width:35,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xffDFF6FF),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.arrow_back,
-                color: Colors.black,
-                size: size.height * 0.03,
+          leadingWidth: size.height * 0.07,
+          leading:isMain?null :GestureDetector(
+            onTap: () {
+              Navigator.pop(context);
+            },
+            child: Container(
+              margin: EdgeInsets.only(left: 10),
+              height: 20,
+              width:20,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xffDFF6FF),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back,
+                  color: Colors.black,
+                  size: size.height * 0.03,
+                ),
               ),
             ),
           ),

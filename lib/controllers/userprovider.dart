@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:secureconnect/models/usermodel.dart';
+import 'package:secureconnect/screens/custom_bottom_bar.dart';
 import 'package:secureconnect/screens/home.dart';
 import 'package:secureconnect/screens/login.dart';
 
@@ -93,48 +94,48 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> signin({
-    required String email,
-    required String password,
-    required BuildContext context,
-  }) async {
-    if (!_validateInputs(email, password)) {
-      _errorMessage = "Please fill in all fields";
-      notifyListeners();
-      return false;
-    }
-
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      _isLoading = false;
-      notifyListeners();
-
-      if (userCredential.user != null && context.mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => Home()),
-        );
-        return true;
-      }
-      return false;
-    } on FirebaseAuthException catch (e) {
-      _handleFirebaseError(e);
-      return false;
-    } catch (e) {
-      _errorMessage = "An unexpected error occurred";
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+ Future<bool> signin({
+  required String email,
+  required String password,
+  required BuildContext context,
+}) async {
+  if (!_validateInputs(email, password)) {
+    _errorMessage = "Please fill in all fields";
+    notifyListeners();
+    return false;
   }
+
+  try {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    _isLoading = false;
+    notifyListeners();
+
+    if (userCredential.user != null && context.mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => CustomBottomBar()),(s)=>false // ✅ CHANGED FROM Home()
+      );
+      return true;
+    }
+    return false;
+  } on FirebaseAuthException catch (e) {
+    _handleFirebaseError(e);
+    return false;
+  } catch (e) {
+    _errorMessage = "An unexpected error occurred";
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+}
 
   bool _validateInputs(String email, String password,
       [String? userName, String? phoneNumber]) {

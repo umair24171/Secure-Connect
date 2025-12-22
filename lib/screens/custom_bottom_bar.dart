@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:secureconnect/controllers/call_detection_service.dart';
+import 'package:secureconnect/controllers/caller_api_service.dart';
 import 'package:secureconnect/controllers/share_services.dart';
 import 'package:secureconnect/screens/calls.dart';
 import 'package:secureconnect/screens/home.dart';
@@ -22,12 +23,13 @@ class _CustomBottomBarState extends State<CustomBottomBar> {
     const Home(),
     const Calls(),
    const StatisticsScreen(),
-    SettingsScreen(),
+    SettingsScreen(isMain: true,),
   ];
 
   @override
   void initState() {
     super.initState();
+  
     initializeCallServices();
   }
 
@@ -44,8 +46,12 @@ final bool? status = await FlutterOverlayWindow.requestPermission();
 
  
         await initializeCallService();
-        ShareServices().initDynamicLinksForRefer(context);
+        ShareServices().initDeepLinkListener(context);
 
+    }
+
+    getNumberInfo(){
+      CallerApiService().getNumberInfo('3067128817');
     }
 
 

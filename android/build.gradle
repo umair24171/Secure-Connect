@@ -3,7 +3,7 @@ allprojects {
         google()
         mavenCentral()
     }
-     // Add this part -------------->
+    
     subprojects {
         afterEvaluate { project ->
             if (project.hasProperty('android')) {
@@ -12,6 +12,18 @@ allprojects {
                         namespace project.group
                     }
                     compileSdkVersion 34
+                    
+                    compileOptions {
+                        sourceCompatibility = JavaVersion.VERSION_11
+                        targetCompatibility = JavaVersion.VERSION_11
+                    }
+                }
+            }
+            
+            // ✅ ADD THIS - Force Kotlin to use JVM 11
+            project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                kotlinOptions {
+                    jvmTarget = "11"
                 }
             }
         }

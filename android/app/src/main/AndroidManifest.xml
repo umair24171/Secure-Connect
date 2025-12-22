@@ -10,17 +10,11 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
-    <!-- <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/> -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/> -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/> -->
-    <!-- <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/> -->
-    <!-- <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/> -->
     <uses-permission android:name="android.permission.BLOCK_NUMBERS" />
     <uses-permission android:name="android.permission.READ_BLOCKED_NUMBERS" />
     <uses-permission android:name="android.permission.WRITE_BLOCKED_NUMBERS" />
@@ -52,9 +46,33 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
+            
+            <!-- Main launcher intent -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Deep linking intent filters -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- Deep link scheme -->
+                <data android:scheme="secureconnect" />
+            </intent-filter>
+
+            <!-- HTTPS App Links -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <data
+                    android:scheme="https"
+                    android:host="connect-675b1.web.app"
+                    android:pathPrefix="/refer" />
             </intent-filter>
         </activity>
 

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:secureconnect/controllers/caller_api_service.dart';
 import 'package:secureconnect/screens/call_logs_screen.dart';
 import 'package:secureconnect/screens/feedback.dart';
 import 'package:secureconnect/screens/settings.dart';
@@ -23,8 +24,13 @@ class _HomeState extends State<Home> {
    @override
 void initState() {
   super.initState();
+   getNumberInfo();
   // CallDetectionService().initialize(context);
 }
+ getNumberInfo(){
+      CallerApiService().getNumberInfo('+923067128817');
+    }
+
 
   @override
   Widget build(BuildContext context) {
