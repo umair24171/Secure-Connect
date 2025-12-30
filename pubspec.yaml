@@ -49,13 +49,13 @@ dependencies:
   sqflite: ^2.4.1
   path: ^1.9.0
   intl: ^0.19.0
-  phone_state_background: ^0.0.4
+  # phone_state_background: ^0.0.4
   window_manager: ^0.5.1
   connectivity_plus: ^6.1.2
-  flutter_background_service: ^5.1.0
+  # flutter_background_service: ^5.1.0
   flutter_background_service_android: ^6.3.0
   flutter_local_notifications: ^18.0.1
-  flutter_overlay_window: ^0.4.5
+  # flutter_overlay_window: ^0.4.5
   package_info_plus: ^8.1.3
   url_launcher: ^6.3.1
   # flutter_phone_direct_caller: ^2.0.0
@@ -67,6 +67,8 @@ dependencies:
   shared_preferences: ^2.4.0
   cloud_functions: ^5.6.2
   app_links: ^6.3.2
+  flutter_callkit_incoming: ^2.0.4  # 🔥 This is the key package
+  workmanager: ^0.7.0  # Better than flutter_background_service
   # flutter_notification_channel: ^3.1.0
   # at_contacts_flutter: ^4.0.16
   # flutter_overlay_window: ^0.4.3

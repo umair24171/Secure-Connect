@@ -1,317 +1,477 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer';
-import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:phone_state/phone_state.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:secureconnect/main.dart';
-import 'package:secureconnect/screens/alert.dart';
-import 'package:secureconnect/firebase_options.dart';
+import 'package:phone_state/phone_state.dart';
+import 'package:workmanager/workmanager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-// CRITICAL: Initialize Firebase ONCE at service level
-bool _firebaseInitialized = false;
+import 'dart:convert';
+import '../models/caller_info.dart';
+import 'caller_api_service.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' hide Event;
 
 @pragma('vm:entry-point')
-void onServiceStart(ServiceInstance service) async {
-  log('Starting Call Service');
-  
-  try {
-    // Initialize Firebase FIRST
-    if (!_firebaseInitialized) {
-      try {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform
-        );
-        _firebaseInitialized = true;
-        log('Firebase initialized in service');
-      } catch (e) {
-        log('Firebase already initialized or error: $e');
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    log('🚀 WorkManager task: $task');
+    try {
+      if (task == 'callMonitoring') {
+        log('✅ Call monitoring heartbeat');
       }
+      return Future.value(true);
+    } catch (e) {
+      log('❌ WorkManager error: $e');
+      return Future.value(false);
     }
-
-    if (service is AndroidServiceInstance) {
-      service.setAsForegroundService();
-      service.setAutoStartOnBootMode(true);
-    }
-
-    // Add delay to ensure everything is ready
-    await Future.delayed(Duration(seconds: 1));
-
-    PhoneState.stream.listen((event) async {
-      if (event.number == null || event.number!.isEmpty) {
-        log('Received call event with empty number');
-        return;
-      }
-
-      final callService = CallService();
-      
-      try {
-        // Add delay between state changes
-        await Future.delayed(Duration(milliseconds: 500));
-        
-        switch (event.status) {
-          case PhoneStateStatus.CALL_INCOMING:
-            log('Incoming call from: ${event.number}');
-            await callService._showOverlay(
-              event.number!,
-              CallScreenType.incoming,
-            );
-            break;
-            
-          case PhoneStateStatus.CALL_STARTED:
-            log('Call started with: ${event.number}');
-            // Only show overlay if not already active
-            if (!await FlutterOverlayWindow.isActive()) {
-              await callService._showOverlay(
-                event.number!,
-                CallScreenType.outgoing,
-              );
-            }
-            break;
-            
-          case PhoneStateStatus.CALL_ENDED:
-            log('Call ended');
-            await callService.hideOverlay();
-            break;
-            
-          default:
-            log('Unhandled phone state: ${event.status}');
-            break;
-        }
-      } catch (e, stack) {
-        log('Error handling call state: $e');
-        log('Stack trace: $stack');
-        // Don't crash the service
-      }
-    });
-
-  } catch (e, stack) {
-    log('Error in onServiceStart: $e');
-    log('Stack trace: $stack');
-  }
+  });
 }
 
-enum CallScreenType { incoming, outgoing, missed }
+class ModernCallService {
+  static final ModernCallService _instance = ModernCallService._internal();
+  factory ModernCallService() => _instance;
+  ModernCallService._internal();
 
-Future<void> initializeCallService() async {
-  await CallService().initialize();
-}
-
-class CallService {
-  static final CallService _instance = CallService._internal();
-  factory CallService() => _instance;
-  CallService._internal();
+  final CallerApiService _apiService = CallerApiService();
+  StreamSubscription<PhoneState>? _phoneStateSubscription;
+  bool _isInitialized = false;
+  bool _isCallActive = false;
+  String? _lastProcessedNumber;
   
-  final String _kLastCallNumberKey = 'last_call_phone_number';
-  bool _isOverlayActive = false;
+  final Map<String, CallerInfo> _callerCache = {};
 
   Future<void> initialize() async {
+    if (_isInitialized) return;
+    
+    log('🚀 Initializing Modern Call Service');
+    
     try {
+      await _loadCache();
       await _requestPermissions();
-      await _startBackgroundService();
-      _initializeOverlayListener();
-    } catch (e) {
-      log('Error initializing CallService: $e');
+      await _initializeWorkManager();
+      _listenToCallEvents();
+      _listenToCallKitActions();
+      
+      _isInitialized = true;
+      log('✅ Modern Call Service initialized successfully');
+    } catch (e, stack) {
+      log('❌ Error initializing: $e\n$stack');
       rethrow;
     }
   }
 
-  void _initializeOverlayListener() {
-    FlutterOverlayWindow.overlayListener.listen((event) {
-      log("Overlay Event: $event");
-    });
+  Future<void> _loadCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheJson = prefs.getString('caller_info_cache');
+      
+      if (cacheJson != null && cacheJson.isNotEmpty) {
+        final Map<String, dynamic> cacheMap = json.decode(cacheJson);
+        cacheMap.forEach((key, value) {
+          try {
+            _callerCache[key] = CallerInfo.fromJson(value as Map<String, dynamic>);
+          } catch (e) {
+            log('⚠️ Skipping corrupted cache entry: $key');
+          }
+        });
+        log('✅ Loaded ${_callerCache.length} cached entries');
+      }
+    } catch (e) {
+      log('⚠️ Cache load error: $e');
+    }
+  }
+
+  Future<void> _saveToCache(String phoneNumber, CallerInfo info) async {
+    try {
+      _callerCache[phoneNumber] = info;
+      final prefs = await SharedPreferences.getInstance();
+      final cacheMap = _callerCache.map((k, v) => MapEntry(k, v.toJson()));
+      await prefs.setString('caller_info_cache', json.encode(cacheMap));
+      log('💾 Cached: $phoneNumber');
+    } catch (e) {
+      log('⚠️ Cache save error: $e');
+    }
   }
 
   Future<void> _requestPermissions() async {
-    final bool overlayStatus = await FlutterOverlayWindow.isPermissionGranted();
-    if (!overlayStatus) {
-      final bool? granted = await FlutterOverlayWindow.requestPermission();
-      if (granted != true) {
-        throw Exception('Overlay permission is required');
-      }
-    }
-
-    Map<Permission, PermissionStatus> statuses = await [
+    await [
       Permission.phone,
       Permission.contacts,
+      Permission.notification,
       Permission.systemAlertWindow,
     ].request();
-
-    if (statuses.values.any((status) => status.isDenied)) {
-      throw Exception('Required permissions not granted');
+    
+    if (await Permission.ignoreBatteryOptimizations.isDenied) {
+      await Permission.ignoreBatteryOptimizations.request();
     }
   }
 
-  Future<void> _showOverlay(String phoneNumber, CallScreenType callType) async {
-    developer.log('Showing overlay for number: $phoneNumber', name: 'call_service');
+ // In modern_call_detection_service.dart, UPDATE this method:
+
+Future<void> _initializeWorkManager() async {
+  // 🔥 DISABLED: WorkManager not needed - native BroadcastReceiver handles everything
+  // The spam notifications were coming from this!
+  
+  /*
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: true,
+  );
+  
+  await Workmanager().registerPeriodicTask(
+    'call-monitor',
+    'callMonitoring',
+    frequency: const Duration(minutes: 15),
+  );
+  */
+  
+  log('✅ WorkManager disabled (using native BroadcastReceiver instead)');
+}
+
+  void _listenToCallEvents() {
+    _phoneStateSubscription = PhoneState.stream.listen((event) async {
+      log('📞 Phone state: ${event.status}');
+      
+      if (event.number == null || event.number!.isEmpty) return;
+      
+      switch (event.status) {
+        case PhoneStateStatus.CALL_INCOMING:
+          log('📲 CALL_INCOMING detected via PhoneState');
+          await _handleIncomingCall(event.number!);
+          break;
+          
+        case PhoneStateStatus.CALL_ENDED:
+          log('📴 Call ended');
+          _isCallActive = false;
+          _lastProcessedNumber = null;
+          await FlutterCallkitIncoming.endAllCalls();
+          break;
+          
+        default:
+          break;
+      }
+    });
+    
+    log('✅ Phone state listener active');
+  }
+
+  // 🔥 PUBLIC: Handle call from native (updates existing native screen)
+  Future<void> handleCallFromNative(String phoneNumber) async {
+    log('🔥 handleCallFromNative: $phoneNumber');
+    
+    // Native already showed basic screen, now update with full info
+    await _updateNativeCallScreen(phoneNumber);
+  }
+
+  Future<void> _handleIncomingCall(String phoneNumber) async {
+    log('📲 INCOMING: $phoneNumber');
+    
+    // Prevent duplicate processing
+    if (_lastProcessedNumber == phoneNumber) {
+      log('⚠️ Already processing this number, skipping');
+      return;
+    }
+    
+    if (_isCallActive) {
+      log('⚠️ Call screen already active, skipping');
+      return;
+    }
+    
+    _isCallActive = true;
+    _lastProcessedNumber = phoneNumber;
+    
+    final cleanNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)+]'), '');
     
     try {
-      // Check if overlay is already active
-      final isActive = await FlutterOverlayWindow.isActive();
-      
-      if (isActive) {
-        developer.log('Overlay already active, updating data', name: 'call_service');
-        await _updateOverlayData(phoneNumber, callType);
+      // 🔥 STEP 1: Check cache (instant)
+      CallerInfo? cachedInfo = _callerCache[cleanNumber];
+      if (cachedInfo != null) {
+        log('⚡ CACHE HIT: ${cachedInfo.name}');
+        await _showCallScreen(
+          phoneNumber: phoneNumber,
+          callerName: cachedInfo.name ?? phoneNumber,
+          isIncoming: true,
+          callerInfo: cachedInfo,
+        );
         return;
       }
-
-      // Store phone number BEFORE creating overlay
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kLastCallNumberKey, phoneNumber);
       
-      developer.log('Creating new overlay', name: 'call_service');
+      log('🔍 Cache miss - fetching fresh data...');
       
-      // Create overlay with proper error handling
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true,
-        overlayTitle: "${callType.toString().split('.').last} Call",
-        overlayContent: "Call from $phoneNumber",
-        flag: OverlayFlag.focusPointer,
-        alignment: OverlayAlignment.topCenter,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
-        width: WindowSize.matchParent,
-        height: 700,
-      );
-
-      developer.log('Overlay created successfully', name: 'call_service');
-      _isOverlayActive = true;
-      
-      // Add delay before sending data to ensure overlay is ready
-      await Future.delayed(Duration(milliseconds: 800));
-      await _updateOverlayData(phoneNumber, callType);
-
-    } catch (e, stack) {
-      developer.log(
-        'Error showing overlay',
-        name: 'call_service',
-        error: e,
-        stackTrace: stack
-      );
-      _isOverlayActive = false;
-      // Don't rethrow - just log the error
-    }
-  }
-
-  Future<void> _startBackgroundService() async {
-    final service = FlutterBackgroundService();
-
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onServiceStart,
-        autoStart: true,
-        isForegroundMode: true,
-        initialNotificationTitle: 'Call Protection Active',
-        initialNotificationContent: 'Monitoring incoming calls',
-        foregroundServiceNotificationId: 888,
-      ),
-      iosConfiguration: IosConfiguration(
-        autoStart: true,
-        onForeground: onServiceStart,
-        onBackground: _onIosBackground,
-      ),
-    );
-  }
-  
-  @pragma('vm:entry-point')
-  static Future<bool> _onIosBackground(ServiceInstance service) async {
-    return true;
-  }
-
-  Future<void> _updateOverlayData(String phoneNumber, CallScreenType callType) async {
-    try {
-      final data = {
-        'phoneNumber': phoneNumber,
-        'callType': callType.toString(),
-        'timestamp': DateTime.now().toIso8601String(),
-      };
-      
-      developer.log('Updating overlay with data: $data', name: 'call_service');
-      await FlutterOverlayWindow.shareData(jsonEncode(data));
-      developer.log('Overlay data updated successfully', name: 'call_service');
-    } catch (e, stack) {
-      developer.log(
-        'Error updating overlay data',
-        name: 'call_service',
-        error: e,
-        stackTrace: stack
-      );
-    }
-  }
-
-  Future<void> hideOverlay() async {
-    try {
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.closeOverlay();
-        _isOverlayActive = false;
+      // 🔥 STEP 2: Check contacts with 2 second timeout
+      String? contactName;
+      try {
+        log('📇 Checking contacts (max 2s)...');
+        contactName = await _getContactName(phoneNumber)
+            .timeout(Duration(seconds: 2));
         
-        // Add delay before showing dialog
-        await Future.delayed(Duration(milliseconds: 500));
-        _showProceedDialog();
+        if (contactName != null && contactName.isNotEmpty) {
+          log('✅ CONTACT FOUND: $contactName');
+          
+          await _showCallScreen(
+            phoneNumber: phoneNumber,
+            callerName: contactName,
+            isIncoming: true,
+            callerInfo: null,
+          );
+          
+          _fetchApiInBackground(phoneNumber, cleanNumber);
+          return;
+        } else {
+          log('⚠️ No contact found');
+        }
+      } catch (e) {
+        log('⚠️ Contact lookup timeout/error: $e');
       }
+      
+      // 🔥 STEP 3: Wait for API (4 seconds)
+      CallerInfo? callerInfo;
+      try {
+        log('⏳ Waiting for API (max 4s)...');
+        callerInfo = await _apiService.getNumberInfo(phoneNumber)
+            .timeout(Duration(seconds: 4));
+        
+        if (callerInfo != null) {
+          log('✅ API SUCCESS: ${callerInfo.name}');
+          await _saveToCache(cleanNumber, callerInfo);
+        }
+      } catch (e) {
+        log('❌ API failed: $e');
+      }
+      
+      String displayName;
+      if (callerInfo?.name != null && callerInfo!.name!.isNotEmpty) {
+        displayName = callerInfo.name!;
+        log('🌐 Using API name');
+      } else {
+        displayName = phoneNumber;
+        log('📱 Using phone number');
+      }
+      
+      await _showCallScreen(
+        phoneNumber: phoneNumber,
+        callerName: displayName,
+        isIncoming: true,
+        callerInfo: callerInfo,
+      );
+      
     } catch (e, stack) {
-      log('Error hiding overlay: $e');
-      log('Stack trace: $stack');
-      _isOverlayActive = false;
-    }
-  }
-  
-  Future<String?> _getLastCallPhoneNumber() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_kLastCallNumberKey);
-    } catch (e) {
-      log('Error getting last call number: $e');
-      return null;
-    }
-  }
-  
-  Future<void> clearLastCallNumber() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kLastCallNumberKey);
-    } catch (e) {
-      log('Error clearing last call number: $e');
+      log('❌ ERROR: $e\n$stack');
+      _isCallActive = false;
+      _lastProcessedNumber = null;
+      
+      try {
+        await _showCallScreen(
+          phoneNumber: phoneNumber,
+          callerName: phoneNumber,
+          isIncoming: true,
+        );
+      } catch (e2) {
+        log('❌ FALLBACK FAILED: $e2');
+      }
     }
   }
 
-  void _showProceedDialog() async {
+  // 🔥 Update the native-shown call screen with full caller info
+  Future<void> _updateNativeCallScreen(String phoneNumber) async {
+    log('🔄 Updating native call screen with full info');
+    
+    final cleanNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)+]'), '');
+    
     try {
-      final BuildContext? context = navigatorKey.currentContext;
-      final String? lastPhoneNumber = await _getLastCallPhoneNumber();
-      
-      if (context != null && lastPhoneNumber != null) {
-        // Ensure we're on main thread
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (BuildContext dialogContext) {
-                return Dialog(
-                  backgroundColor: Colors.transparent,
-                  child: ProceedDialog(
-                    context: dialogContext,
-                    size: MediaQuery.of(context).size,
-                    fontFamily: 'Roboto',
-                    phoneNumber: lastPhoneNumber,
-                  ),
-                );
-              },
-            );
-          }
-        });
+      // Quick check cache first
+      CallerInfo? cachedInfo = _callerCache[cleanNumber];
+      if (cachedInfo != null) {
+        log('⚡ Using cached info for update');
+        await _showCallScreen(
+          phoneNumber: phoneNumber,
+          callerName: cachedInfo.name ?? phoneNumber,
+          isIncoming: true,
+          callerInfo: cachedInfo,
+        );
+        return;
       }
-    } catch (e, stack) {
-      log('Error showing proceed dialog: $e');
-      log('Stack trace: $stack');
+      
+      // Quick contact check
+      String? contactName;
+      try {
+        contactName = await _getContactName(phoneNumber)
+            .timeout(Duration(seconds: 1));
+        
+        if (contactName != null) {
+          log('✅ Contact found for update: $contactName');
+          await _showCallScreen(
+            phoneNumber: phoneNumber,
+            callerName: contactName,
+            isIncoming: true,
+            callerInfo: null,
+          );
+          
+          // Fetch API in background for future
+          _fetchApiInBackground(phoneNumber, cleanNumber);
+          return;
+        }
+      } catch (e) {
+        log('⚠️ Contact check timeout');
+      }
+      
+      // Try API
+      try {
+        final callerInfo = await _apiService.getNumberInfo(phoneNumber)
+            .timeout(Duration(seconds: 3));
+        
+        if (callerInfo != null) {
+          log('✅ API info fetched for update');
+          await _saveToCache(cleanNumber, callerInfo);
+          
+          await _showCallScreen(
+            phoneNumber: phoneNumber,
+            callerName: callerInfo.name ?? phoneNumber,
+            isIncoming: true,
+            callerInfo: callerInfo,
+          );
+        }
+      } catch (e) {
+        log('⚠️ API timeout for update');
+      }
+      
+    } catch (e) {
+      log('❌ Update failed: $e');
     }
+  }
+
+  void _fetchApiInBackground(String phoneNumber, String cleanNumber) {
+    Future.microtask(() async {
+      try {
+        log('🔄 Background API fetch started...');
+        final callerInfo = await _apiService.getNumberInfo(phoneNumber)
+            .timeout(Duration(seconds: 5));
+        
+        if (callerInfo != null) {
+          log('✅ Background API: ${callerInfo.name}');
+          await _saveToCache(cleanNumber, callerInfo);
+        }
+      } catch (e) {
+        log('⚠️ Background API failed: $e');
+      }
+    });
+  }
+
+ Future<void> _showCallScreen({
+  required String phoneNumber,
+  required String callerName,
+  required bool isIncoming,
+  CallerInfo? callerInfo,
+}) async {
+  // 🔥 REMOVED: Don't end calls before showing!
+  // This was causing the screen to disappear immediately
+  /*
+  try {
+    await FlutterCallkitIncoming.endAllCalls();
+    await Future.delayed(Duration(milliseconds: 100));
+  } catch (e) {
+    log('⚠️ Error ending previous calls: $e');
+  }
+  */
+  
+  final backgroundColor = callerInfo?.isSpam == true ? '#EF4444' : '#0EA5E9';
+  final displayName = callerInfo?.isSpam == true 
+      ? '⚠️ SPAM: $callerName' 
+      : callerName;
+  
+  final params = CallKitParams(
+    id: '${phoneNumber.hashCode}_${DateTime.now().millisecondsSinceEpoch}',
+    nameCaller: displayName,
+    appName: 'SecureConnect',
+    avatar: callerInfo?.photoUrl,
+    handle: phoneNumber,
+    type: 0,
+    textAccept: 'Accept',
+    textDecline: 'Decline',
+    duration: 30000,
+    android: AndroidParams(
+      isCustomNotification: true,
+      isShowLogo: false,
+      ringtonePath: 'silent',
+      backgroundColor: backgroundColor,
+      backgroundUrl: '',
+      actionColor: '#10B981',
+      textColor: '#ffffff',
+      incomingCallNotificationChannelName: 'incoming_call_channel',
+      missedCallNotificationChannelName: 'missed_call_channel',
+      isShowCallID: true,
+      isShowFullLockedScreen: true,  // 🔥 ADD THIS
+    ),
+    ios: IOSParams(
+      iconName: 'AppIcon',
+      handleType: 'generic',
+      ringtonePath: 'silent',
+      supportsVideo: false,
+      maximumCallGroups: 1,
+      maximumCallsPerCallGroup: 1,
+    ),
+  );
+
+  try {
+    await FlutterCallkitIncoming.showCallkitIncoming(params);
+    log('✅ DISPLAYED: $displayName');
+  } catch (e, stack) {
+    log('❌ Failed to show call screen: $e\n$stack');
+  }
+}
+
+  void _listenToCallKitActions() {
+    FlutterCallkitIncoming.onEvent.listen((event) async {
+      if (event == null) return;
+      log('🎯 EVENT: ${event.event}');
+      
+      switch (event.event) {
+        case Event.actionCallDecline:
+        case Event.actionCallEnded:
+        case Event.actionCallTimeout:
+          log('📴 Ending call');
+          _isCallActive = false;
+          _lastProcessedNumber = null;
+          await FlutterCallkitIncoming.endAllCalls();
+          break;
+        default:
+          break;
+      }
+    });
+  }
+
+  Future<String?> _getContactName(String phoneNumber) async {
+    try {
+      if (!await FlutterContacts.requestPermission()) return null;
+      
+      final contacts = await FlutterContacts.getContacts(withProperties: true);
+      final cleanNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)+]'), '');
+      
+      for (var contact in contacts) {
+        for (var phone in contact.phones) {
+          final cleanContact = phone.number.replaceAll(RegExp(r'[\s\-\(\)+]'), '');
+          
+          final last10 = cleanNumber.length >= 10 
+              ? cleanNumber.substring(cleanNumber.length - 10) 
+              : cleanNumber;
+          final contactLast10 = cleanContact.length >= 10 
+              ? cleanContact.substring(cleanContact.length - 10) 
+              : cleanContact;
+          
+          if (last10 == contactLast10) {
+            return contact.displayName;
+          }
+        }
+      }
+    } catch (e) {
+      log('❌ Contact error: $e');
+    }
+    return null;
+  }
+
+  void dispose() {
+    _phoneStateSubscription?.cancel();
+    _apiService.dispose();
   }
 }

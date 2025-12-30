@@ -10,10 +10,16 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/caller_info.dart';
 
 class CallerApiService {
-  // Eyecon RapidAPI endpoint
-  static const String baseUrl = 'https://eyecon3.p.rapidapi.com/api/v1';
-  static const String apiKey = '3ac06090ddmsh67199c62f193313p11d9e2jsnedbd6beeae61';
-  static const String apiHost = 'eyecon.p.rapidapi.com'; // FIXED: Should match baseUrl
+  // 🔥 Eyecon3 for caller info
+  static const String eyeconUrl = 'https://eyecon3.p.rapidapi.com/api/v1';
+  static const String eyeconApiKey = '3ac06090ddmsh67199c62f193313p11d9e2jsnedbd6beeae61';
+  static const String eyeconApiHost = 'eyecon.p.rapidapi.com';
+  
+  // 🔥 CallerAPI for spam detection
+  static const String callerApiUrl = 'https://api.callerapi.com/api/lookup';
+  static const String callerApiKey = 'caffbda4-f3da-4a2e-9861-618a2f933e4d';
+  
+  
   static const int maxRetries = 3;
   final _client = http.Client();
 
@@ -26,7 +32,6 @@ class CallerApiService {
         return false;
       }
       
-      // Quick internet check with timeout
       try {
         final result = await InternetAddress.lookup('google.com')
             .timeout(Duration(seconds: 3));
@@ -41,137 +46,243 @@ class CallerApiService {
     }
   }
 
-  /// Fetch caller information from Eyecon3 RapidAPI
-  Future<CallerInfo?> getNumberInfo(String phoneNumber) async {
-    log('=== Starting API call for: $phoneNumber ===');
-    
-    // Check internet first
-    if (!await _checkInternetConnection()) {
-      log('No internet connection available');
-      return null;
-    }
-
-    int attempts = 0;
-    while (attempts < maxRetries) {
-      try {
-        // Parse phone number
-        final parsedNumber = _parsePhoneNumber(phoneNumber);
-        final countryCode = parsedNumber['code'];
-        final number = parsedNumber['number'];
-        
-        log('Parsed - Code: $countryCode, Number: $number');
-        
-        // Build URL
-        final url = '$baseUrl/search?code=$countryCode&number=$number';
-        log('API URL: $url');
-        
-        // Make request with timeout
-        final response = await _client.get(
-          Uri.parse(url),
-          headers: {
-            'X-RapidAPI-Key': apiKey,
-            'X-RapidAPI-Host': apiHost,
-            'Content-Type': 'application/json',
-          },
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            log('Request timed out (attempt ${attempts + 1})');
-            throw TimeoutException('Request timed out');
-          },
-        );
-        
-        log('Response status: ${response.statusCode}');
-        log('Response headers: ${response.headers}');
-        log('Response body (first 500 chars): ${response.body.substring(0, math.min(500, response.body.length))}');
-        
-        if (response.statusCode == 200) {
-          try {
-            final jsonResponse = json.decode(response.body) as Map<String, dynamic>;
-            
-            // Check if response has expected structure
-            if (jsonResponse['status'] != true) {
-              log('API returned non-success status: ${jsonResponse['status']}');
-              log('Message: ${jsonResponse['message']}');
-              return null;
-            }
-
-            if (jsonResponse['data'] == null) {
-              log('API returned null data');
-              return null;
-            }
-
-            // Parse response
-            CallerInfo info = CallerInfo.fromJson(jsonResponse['data']);
-            log('Successfully parsed caller info: ${info.name}');
-
-            // If spam detected, save to Firebase (non-blocking)
-            if (info.isSpam) {
-              _saveSpamCallAsync(info, phoneNumber, 'incoming');
-            }
-
-            return info;
-          } catch (e, stack) {
-            log('Error parsing API response: $e');
-            log('Stack trace: $stack');
-            return null;
-          }
-        } else if (response.statusCode == 429) {
-          // Rate limit - exponential backoff
-          log('Rate limit hit (attempt ${attempts + 1})');
-          await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
-          attempts++;
-          continue;
-        } else if (response.statusCode == 403) {
-          log('API authentication failed - check API key');
-          return null;
-        } else {
-          log('API error: ${response.statusCode} - ${response.body}');
-          return null;
-        }
-      } on SocketException catch (e) {
-        log('Socket error (attempt ${attempts + 1}): $e');
-        if (attempts + 1 < maxRetries) {
-          await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
-          attempts++;
-          continue;
-        }
-        return null;
-      } on TimeoutException catch (e) {
-        log('Timeout (attempt ${attempts + 1}): $e');
-        if (attempts + 1 < maxRetries) {
-          await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
-          attempts++;
-          continue;
-        }
-        return null;
-      } catch (e, stackTrace) {
-        log('Unexpected error (attempt ${attempts + 1}): $e');
-        log('Stack trace: $stackTrace');
-        if (attempts + 1 < maxRetries) {
-          await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
-          attempts++;
-          continue;
-        }
-        return null;
-      }
-    }
-    
-    log('All retry attempts failed for: $phoneNumber');
+ /// 🔥 Main method: Get caller info from BOTH APIs and merge
+Future<CallerInfo?> getNumberInfo(String phoneNumber) async {
+  log('=== Starting dual API lookup for: $phoneNumber ===');
+  
+  if (!await _checkInternetConnection()) {
+    log('No internet connection available');
     return null;
   }
 
-  /// Save spam call to Firebase (async, won't block UI)
+  try {
+    // 🔥 Call BOTH APIs in parallel for speed
+    final results = await Future.wait([
+      _getEyeconInfo(phoneNumber),
+      _getCallerApiSpamInfo(phoneNumber),
+    ], eagerError: false);
+
+    // 🔥 FIX: Cast the results properly
+    final eyeconInfo = results[0] as CallerInfo?;
+    final spamInfo = results[1] as Map<String, dynamic>?;
+
+    // 🔥 Merge results
+    CallerInfo? mergedInfo = _mergeCallerInfo(eyeconInfo, spamInfo, phoneNumber);
+    
+    if (mergedInfo != null) {
+      log('✅ MERGED INFO: ${mergedInfo.name} | Spam: ${mergedInfo.isSpam} (${mergedInfo.spamCount} reports)');
+      
+      // Save to Firebase if spam
+      if (mergedInfo.isSpam) {
+        _saveSpamCallAsync(mergedInfo, phoneNumber, 'incoming');
+      }
+    }
+
+    return mergedInfo;
+  } catch (e, stack) {
+    log('❌ Error in dual API lookup: $e');
+    log('Stack: $stack');
+    return null;
+  }
+}
+  /// 🔥 Get caller info from Eyecon3
+ /// 🔥 Get caller info from Eyecon3 - Reduce retries
+Future<CallerInfo?> _getEyeconInfo(String phoneNumber) async {
+  log('🔍 Fetching Eyecon3 info...');
+  
+  int attempts = 0;
+  const maxAttempts = 2; // 🔥 Reduced from 3 to 2
+  
+  while (attempts < maxAttempts) {
+    try {
+      final parsedNumber = _parsePhoneNumber(phoneNumber);
+      final countryCode = parsedNumber['code'];
+      final number = parsedNumber['number'];
+      
+      final url = '$eyeconUrl/search?code=$countryCode&number=$number';
+      log('Eyecon URL: $url');
+      
+      final response = await _client.get(
+        Uri.parse(url),
+        headers: {
+          'X-RapidAPI-Key': eyeconApiKey,
+          'X-RapidAPI-Host': eyeconApiHost,
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 8));
+      
+      log('Eyecon status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body) as Map<String, dynamic>;
+        
+        if (jsonResponse['status'] == true && jsonResponse['data'] != null) {
+          CallerInfo info = CallerInfo.fromEyeconJson(jsonResponse['data']);
+          log('✅ Eyecon: ${info.name}');
+          return info;
+        }
+      } else if (response.statusCode == 429) {
+        log('⚠️ Eyecon rate limit - skipping retries');
+        return null; // 🔥 Don't retry on rate limit
+      } else if (response.statusCode == 403) {
+        log('❌ Eyecon auth failed - API key exhausted or invalid');
+        return null; // 🔥 Don't retry on auth failure
+      }
+      
+      log('⚠️ Eyecon returned no data');
+      return null;
+    } catch (e) {
+      log('⚠️ Eyecon error (attempt ${attempts + 1}): $e');
+      if (attempts + 1 < maxAttempts) {
+        await Future.delayed(Duration(seconds: 1));
+        attempts++;
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+  /// 🔥 Get spam info from CallerAPI
+/// 🔥 Get spam info from CallerAPI - Handle 402 error gracefully
+Future<Map<String, dynamic>?> _getCallerApiSpamInfo(String phoneNumber) async {
+  log('🚨 Fetching CallerAPI spam info...');
+  
+  int attempts = 0;
+  while (attempts < maxRetries) {
+    try {
+      final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+      final url = '$callerApiUrl/$cleanNumber?hlr=false';
+      log('CallerAPI URL: $url');
+      
+      final response = await _client.get(
+        Uri.parse(url),
+        headers: {
+          'x-auth': callerApiKey,
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 8));
+      
+      log('CallerAPI status: ${response.statusCode}');
+      log('CallerAPI response: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body) as Map<String, dynamic>;
+        
+        if (jsonResponse['status'] == 'success' && jsonResponse['data'] != null) {
+          final data = jsonResponse['data'] as Map<String, dynamic>;
+          
+          bool isSpam = data['is_spam'] == true;
+          int spamScore = (data['spam_score'] ?? 0) as int;
+          int totalComplaints = (data['total_complaints'] ?? 0) as int;
+          String? entityType = data['entity_type'] as String?;
+          
+          String? category;
+          if (data['business_info'] != null) {
+            final businessInfo = data['business_info'] as Map<String, dynamic>;
+            category = businessInfo['category'] as String?;
+          }
+          
+          log('✅ CallerAPI: Spam=$isSpam, Score=$spamScore, Complaints=$totalComplaints');
+          
+          return {
+            'isSpam': isSpam,
+            'spamCount': totalComplaints,
+            'spamScore': spamScore,
+            'category': category ?? entityType,
+            'entityType': entityType,
+          };
+        } else if (jsonResponse['status'] == 'error') {
+          log('⚠️ CallerAPI error: ${jsonResponse['message']}');
+          return null;
+        }
+      } else if (response.statusCode == 402) {
+        // 🔥 Out of credits - don't retry, just return null
+        log('⚠️ CallerAPI out of credits - spam check disabled');
+        return null;
+      } else if (response.statusCode == 429) {
+        log('CallerAPI rate limit (attempt ${attempts + 1})');
+        await Future.delayed(Duration(seconds: math.pow(2, attempts).toInt()));
+        attempts++;
+        continue;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        log('❌ CallerAPI auth failed - check x-auth key');
+        return null;
+      }
+      
+      log('⚠️ CallerAPI returned no spam data');
+      return null;
+    } catch (e) {
+      log('⚠️ CallerAPI error (attempt ${attempts + 1}): $e');
+      if (attempts + 1 < maxRetries) {
+        await Future.delayed(Duration(seconds: 1));
+        attempts++;
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+  /// 🔥 Merge Eyecon caller info + CallerAPI spam info
+ CallerInfo? _mergeCallerInfo(
+  CallerInfo? eyeconInfo,
+  Map<String, dynamic>? spamInfo,
+  String phoneNumber
+) {
+  // If we have eyecon info, use it as base
+  if (eyeconInfo != null) {
+    // Override spam info from CallerAPI if available
+    if (spamInfo != null) {
+      return CallerInfo(
+        name: eyeconInfo.name,
+        isSpam: spamInfo['isSpam'] ?? false,
+        spamCount: spamInfo['spamCount'] ?? 0,
+        provider: eyeconInfo.provider,
+        country: eyeconInfo.country,
+        numberType: eyeconInfo.numberType,
+        photoUrl: eyeconInfo.photoUrl,
+        rating: spamInfo['isSpam'] == true 
+            ? (spamInfo['spamScore'] ?? 0).toDouble() / 100 * 5 // Convert score to rating
+            : eyeconInfo.rating,
+        category: spamInfo['category'] ?? eyeconInfo.category,
+        websites: eyeconInfo.websites,
+        otherNames: eyeconInfo.otherNames,
+      );
+    }
+    // No spam info, return eyecon as-is
+    return eyeconInfo;
+  }
+
+  // If only spam info available (no eyecon)
+  if (spamInfo != null) {
+    return CallerInfo(
+      name: phoneNumber,
+      isSpam: spamInfo['isSpam'] ?? false,
+      spamCount: spamInfo['spamCount'] ?? 0,
+      category: spamInfo['category'],
+      rating: spamInfo['isSpam'] == true 
+          ? (spamInfo['spamScore'] ?? 0).toDouble() / 100 * 5
+          : null,
+    );
+  }
+
+  // No info from either API
+  return null;
+}
+
+  /// Save spam call to Firebase (async)
   Future<void> _saveSpamCallAsync(
     CallerInfo callerInfo, 
     String phoneNumber, 
     String callType
   ) async {
-    // Run in background, don't await
     Future.microtask(() => addSpamCallToFirebase(callerInfo, phoneNumber, callType));
   }
 
-  /// Add spam call information to Firebase Firestore
+  /// Add spam call to Firebase
   Future<void> addSpamCallToFirebase(
     CallerInfo callerInfo, 
     String phoneNumber, 
@@ -188,7 +299,6 @@ class CallerApiService {
         return;
       }
 
-      // Create SpamCall object
       final spamCall = SpamCall(
         phoneNumber: phoneNumber,
         timestamp: DateTime.now(),
@@ -202,21 +312,20 @@ class CallerApiService {
         userId: userId,
       );
 
-      // Save to Firestore with timeout
       await firestore
           .collection('spam_calls')
           .doc(phoneNumber)
           .set(spamCall.toMap(), SetOptions(merge: true))
           .timeout(Duration(seconds: 5));
 
-      log('Spam call saved: $phoneNumber (Count: ${callerInfo.spamCount})');
+      log('✅ Spam call saved: $phoneNumber (Count: ${callerInfo.spamCount})');
     } catch (e, stackTrace) {
       log('Error saving spam call: $e');
       log('Stack trace: $stackTrace');
     }
   }
 
-  /// Get spam call history for current user
+  /// Get spam call history
   Future<List<SpamCall>> getUserSpamCalls() async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -226,7 +335,7 @@ class CallerApiService {
           .collection('spam_calls')
           .where('userId', isEqualTo: userId)
           .orderBy('timestamp', descending: true)
-          .limit(100) // Add limit for performance
+          .limit(100)
           .get()
           .timeout(Duration(seconds: 10));
 
@@ -235,12 +344,11 @@ class CallerApiService {
           .toList();
     } catch (e, stackTrace) {
       log('Error fetching spam calls: $e');
-      log('Stack trace: $stackTrace');
       return [];
     }
   }
 
-  /// Delete a spam call record
+  /// Delete spam call
   Future<bool> deleteSpamCall(String phoneNumber) async {
     try {
       await FirebaseFirestore.instance
@@ -250,18 +358,16 @@ class CallerApiService {
           .timeout(Duration(seconds: 5));
       log('Spam call deleted: $phoneNumber');
       return true;
-    } catch (e, stackTrace) {
+    } catch (e) {
       log('Error deleting spam call: $e');
-      log('Stack trace: $stackTrace');
       return false;
     }
   }
 
-  /// Parse phone number to country code and number
+  /// Parse phone number for Eyecon (country code + number)
   Map<String, String> _parsePhoneNumber(String phoneNumber) {
     String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
     
-    // Remove leading zero
     if (cleaned.startsWith('0') && cleaned.length > 1) {
       cleaned = cleaned.substring(1);
     }
@@ -272,7 +378,6 @@ class CallerApiService {
     if (cleaned.startsWith('+')) {
       cleaned = cleaned.substring(1);
       
-      // Extract country code
       if (cleaned.startsWith('92')) {
         countryCode = '92';
         number = cleaned.substring(2);
@@ -280,7 +385,6 @@ class CallerApiService {
         countryCode = '1';
         number = cleaned.substring(1);
       } else if (cleaned.length > 10) {
-        // Try to extract country code (1-3 digits)
         final possibleCode = cleaned.substring(0, math.min(3, cleaned.length - 10));
         if (possibleCode.isNotEmpty) {
           countryCode = possibleCode;
@@ -295,11 +399,32 @@ class CallerApiService {
       number = cleaned.substring(1);
     }
     
-    log('Parsed phone - Code: $countryCode, Number: $number');
     return {'code': countryCode, 'number': number};
   }
 
-  /// Clean up resources
+  /// Clean phone number for CallerAPI (E.164 format)
+  String _cleanPhoneNumber(String phoneNumber) {
+    String cleaned = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
+    }
+    
+    if (!cleaned.startsWith('+')) {
+      if (cleaned.length == 10) {
+        cleaned = '+1$cleaned'; // US
+      } else if (cleaned.startsWith('92')) {
+        cleaned = '+$cleaned';
+      } else if (cleaned.startsWith('1') && cleaned.length == 11) {
+        cleaned = '+$cleaned';
+      } else {
+        cleaned = '+$cleaned';
+      }
+    }
+    
+    return cleaned;
+  }
+
   void dispose() {
     _client.close();
   }

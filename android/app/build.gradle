@@ -17,12 +17,12 @@ android {
 
     compileOptions {
         coreLibraryDesugaringEnabled true  
-        sourceCompatibility = JavaVersion.VERSION_11  // ✅ Changed to 11
-        targetCompatibility = JavaVersion.VERSION_11  // ✅ Changed to 11
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "11"  // ✅ Changed to 11
+        jvmTarget = "11"
     }
 
     defaultConfig {
@@ -47,4 +47,11 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.2'
+    
+    // 🔥 WorkManager - CRITICAL for terminated state call handling
+    implementation 'androidx.work:work-runtime-ktx:2.9.0'
+    
+    // AndroidX Core
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
 }

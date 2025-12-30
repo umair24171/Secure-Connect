@@ -1,4 +1,3 @@
-// models/caller_info.dart
 class CallerInfo {
   final String? name;
   final bool isSpam;
@@ -10,7 +9,7 @@ class CallerInfo {
   final double? rating;
   final String? category;
   final List<String>? websites;
-  final List<String>? otherNames; // Other names associated with this number
+  final List<String>? otherNames;
 
   CallerInfo({
     this.name,
@@ -26,76 +25,52 @@ class CallerInfo {
     this.otherNames,
   });
 
-  /// ✅ UPDATED: Parse Eyecon3 RapidAPI response (Dec 2025)
-  /// Response format:
-  /// {
-  ///   "status": true,
-  ///   "message": "Success",
-  ///   "data": {
-  ///     "fullName": "Umair Bilal",
-  ///     "b64": "base64_photo",
-  ///     "otherNames": [{"name": "...", "type": ""}],
-  ///     "facebookID": {},
-  ///     "images": [{"id": "...", "pictures": {"200": "url", "600": "url"}}]
-  ///   }
-  /// }
-  factory CallerInfo.fromJson(Map<String, dynamic> json) {
-    // Extract full name
+  // 🔥 Parse Eyecon3 response (for caller info)
+  factory CallerInfo.fromEyeconJson(Map<String, dynamic> json) {
     String? callerName = json['fullName'] as String?;
     
-    // Get other names
     List<String>? otherNames;
     if (json['otherNames'] != null && json['otherNames'] is List) {
       List names = json['otherNames'] as List;
       otherNames = names
-          .map((n) => n['name'] as String?)
+          .map((n) => n is Map ? (n['name'] as String?) : n.toString())
           .where((name) => name != null && name.isNotEmpty)
           .cast<String>()
           .toList();
     }
     
-    // Get photo URL from images array
     String? photoUrl;
     if (json['images'] != null && json['images'] is List) {
       List images = json['images'] as List;
       if (images.isNotEmpty && images[0]['pictures'] != null) {
-        // Get highest quality image (600px)
-        photoUrl = images[0]['pictures']['600'] as String?;
-        // Fallback to 200px if 600 not available
-        photoUrl ??= images[0]['pictures']['200'] as String?;
+        photoUrl = images[0]['pictures']['600'] as String? ??
+                   images[0]['pictures']['200'] as String?;
       }
     }
     
-    // If no image URL, check for base64
     if (photoUrl == null && json['b64'] != null && json['b64'].toString().isNotEmpty) {
-      // Store base64 with data URI prefix for easy usage
       photoUrl = 'data:image/jpeg;base64,${json['b64']}';
     }
     
-    // Get Facebook ID if available
-    String? facebookId;
-    if (json['facebookID'] is Map && json['facebookID'].isNotEmpty) {
-      facebookId = json['facebookID'].toString();
-    }
-    
-    // Spam detection - Eyecon doesn't provide this directly
-    // You can implement custom logic or use another API
-    bool isSpam = false;
-    int spamCount = 0;
-
+    // Eyecon doesn't have spam info, so default to false
     return CallerInfo(
-      name: callerName ?? 'Unknown Number',
-      isSpam: isSpam,
-      spamCount: spamCount,
-      provider: null, // Eyecon doesn't provide carrier info
-      country: null,  // Extracted from phone number
-      numberType: otherNames != null && otherNames.isNotEmpty ? 'Multiple Names' : null,
-      photoUrl: photoUrl,
-      rating: null,
-      category: facebookId != null ? 'Facebook User' : null,
-      websites: null,
+      name: callerName ?? json['name'] as String? ?? 'Unknown Number',
+      isSpam: false, // Will be overridden by CallerAPI
+      spamCount: 0,
+      provider: json['provider'] as String?,
+      country: json['country'] as String?,
+      numberType: otherNames != null && otherNames.isNotEmpty ? 'Multiple Names' : json['numberType'] as String?,
+      photoUrl: photoUrl ?? json['photoUrl'] as String?,
+      rating: json['rating']?.toDouble(),
+      category: json['category'] as String?,
+      websites: json['websites'] != null ? List<String>.from(json['websites']) : null,
       otherNames: otherNames,
     );
+  }
+
+  // Keep for backward compatibility
+  factory CallerInfo.fromJson(Map<String, dynamic> json) {
+    return CallerInfo.fromEyeconJson(json);
   }
 
   Map<String, dynamic> toJson() {
@@ -115,11 +90,13 @@ class CallerInfo {
   }
 }
 
+// SpamCall class stays the same
+
 class SpamCall extends CallerInfo {
   final int? id;
   final String phoneNumber;
   final DateTime timestamp;
-  final String callType; // incoming or outgoing
+  final String callType;
   final String? userId;
 
   SpamCall({
@@ -155,26 +132,24 @@ class SpamCall extends CallerInfo {
 
   factory SpamCall.fromMap(Map<String, dynamic> map) {
     return SpamCall(
-      id: map['id'],
-      phoneNumber: map['phoneNumber'],
-      timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp']),
-      callType: map['callType'],
-      name: map['name'],
-      isSpam: map['isSpam'] == 1,
-      spamCount: map['spamCount'] ?? 0,
-      provider: map['provider'],
-      country: map['country'],
-      numberType: map['numberType'],
-      photoUrl: map['photoUrl'],
+      id: map['id'] is int ? map['id'] : int.tryParse(map['id']?.toString() ?? '0'),
+      phoneNumber: map['phoneNumber']?.toString() ?? '',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(
+        map['timestamp'] is int ? map['timestamp'] : int.tryParse(map['timestamp']?.toString() ?? '0') ?? 0
+      ),
+      callType: map['callType']?.toString() ?? 'incoming',
+      name: map['name']?.toString(),
+      isSpam: map['isSpam'] == 1 || map['isSpam'] == true,
+      spamCount: map['spamCount'] is int ? map['spamCount'] : int.tryParse(map['spamCount']?.toString() ?? '0') ?? 0,
+      provider: map['provider']?.toString(),
+      country: map['country']?.toString(),
+      numberType: map['numberType']?.toString(),
+      photoUrl: map['photoUrl']?.toString(),
       rating: map['rating']?.toDouble(),
-      category: map['category'],
-      websites: map['websites'] != null 
-          ? List<String>.from(map['websites']) 
-          : null,
-      otherNames: map['otherNames'] != null 
-          ? List<String>.from(map['otherNames']) 
-          : null,
-      userId: map['userId'],
+      category: map['category']?.toString(),
+      websites: map['websites'] != null ? List<String>.from(map['websites']) : null,
+      otherNames: map['otherNames'] != null ? List<String>.from(map['otherNames']) : null,
+      userId: map['userId']?.toString(),
     );
   }
 
