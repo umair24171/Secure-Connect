@@ -12,12 +12,12 @@ import '../models/caller_info.dart';
 class CallerApiService {
   // 🔥 Eyecon3 for caller info
   static const String eyeconUrl = 'https://eyecon3.p.rapidapi.com/api/v1';
-  static const String eyeconApiKey = '3ac06090ddmsh67199c62f193313p11d9e2jsnedbd6beeae61';
+  static const String eyeconApiKey = '';
   static const String eyeconApiHost = 'eyecon.p.rapidapi.com';
   
   // 🔥 CallerAPI for spam detection
   static const String callerApiUrl = 'https://api.callerapi.com/api/lookup';
-  static const String callerApiKey = 'caffbda4-f3da-4a2e-9861-618a2f933e4d';
+  static const String callerApiKey = '';
   
   
   static const int maxRetries = 3;
