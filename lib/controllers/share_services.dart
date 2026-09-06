@@ -6,18 +6,18 @@ class ShareServices {
  final dynamicLink = FirebaseDynamicLinks.instance;
    Future<String> referFriend(String userId) async {
     final DynamicLinkParameters dynamicLinkParameters = DynamicLinkParameters(
-      uriPrefix: 'https://secureconnectapp.page.link',
-      link: Uri.parse('https://secureconnectapp.page.link?userId=$userId'),
+      uriPrefix: '',
+      link: Uri.parse(''),
       androidParameters: const AndroidParameters(
-        packageName: 'com.app.secureconnect',
+        packageName: '',
         minimumVersion: 1,
       ),
-       iosParameters: const IOSParameters(bundleId: 'com.app.secureconnect',minimumVersion: '1'),
+       iosParameters: const IOSParameters(bundleId: '',minimumVersion: '1'),
       socialMetaTagParameters: SocialMetaTagParameters(
         title: 'Secure Connect',
         description: 'secure connect',
         imageUrl: Uri.parse(
-            'https://firebasestorage.googleapis.com/v0/b/voisbe-1f7b6.appspot.com/o/voisbe_logo.png?alt=media&token=3b3b3b3b-3b3b-3b3b-3b3b-3b3b3b3b3b3b'),
+            ''),
       ),
     );
 
